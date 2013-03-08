@@ -1,0 +1,1 @@
+../../griddata/gdal-python/invdistgis.py

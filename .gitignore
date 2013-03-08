@@ -1,0 +1,13 @@
+# Ignore `test` and `SAVE` directories
+test/
+SAVE/
+
+# Ignore data dir with `*.nc` and `*.nc.gz` data files
+data/
+
+# Ignore python binary files
+*.pyc/
+
+# Ignore swapfiles
+*~
+*.swp
