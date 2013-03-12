@@ -43,7 +43,7 @@ if __name__ == '__main__':
                     np.atleast_2d(180. - np.abs(np.linspace(0., 350., 9)))).T
 
     # interpolate data to 1 degree grid
-    data_interp = geo_interp(lats,lons,data,2)
+    data_interp = geointerp(lats,lons,data,2)
 
     '''Looking at the original and the interpolated data,
     one can see that the interpolant reproduces the original data very well'''

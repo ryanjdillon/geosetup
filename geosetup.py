@@ -1,9 +1,10 @@
-#!/usr/bin/env python -B
+#!/usr/bin/env python
 
 from mpl_toolkits.basemap import Basemap
 import matplotlib.pyplot as plt
 import numpy as np
 import sys
+#TODO change to use pyproj geod.fwd() and geod.inv()
 import geosetup.spheredistance as sd
 from geosetup.cortad import getCortad
 import datetime

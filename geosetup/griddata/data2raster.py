@@ -1,5 +1,6 @@
 import numpy as np
 import gdal
+import os
 from osgeo import gdal
 from osgeo import osr
 from osgeo import ogr
@@ -7,7 +8,7 @@ from osgeo.gdalconst import *
 import pyproj
 import scipy.sparse
 import scipy
-gdal.AllRegister() # register all drivers
+gdal.AllRegister()
 gdal.UseExceptions()
 
 '''http://monkut.webfactional.com/blog/archive/2012/5/2/understanding-raster-basic-gis-concepts-and-the-python-gdal-library/'''
@@ -34,6 +35,7 @@ class GeoPoint:
     lcc = pyproj.Proj("+init=EPSG:3034")
     # WGS84 Web Mercator (Auxillary Sphere; aka EPSG:900913)
     web_mercator = pyproj.Proj("+init=EPSG:3857")
+    # TODO add useful projections, or hopefully make automatic
 
     def __init__(self, x, y, vals,inproj=wgs84, outproj=web_mercator,
 cell_width_meters=50.,cell_height_meters=50.):
@@ -63,18 +65,20 @@ cell_width_meters=50.,cell_height_meters=50.):
         data and the desired cell size"""
         #TODO convert points to 2D projection first
 
-        print 'f',(max(point_x)-min(point_x))/cell_width_meters
+        cols = int(((max(point_x) - min(point_x)) / cell_width_meters)+1)
+        rows = int(((max(point_y) - min(point_y)) / abs(cell_height_meters))+1)
 
-        cols = int((max(point_x) - min(point_x)) / cell_width_meters)
-        rows = int((max(point_y) - min(point_y)) / abs(cell_height_meters))
+        print 'f',(max(point_x)-min(point_x))/cell_width_meters
+        print 'cols: ',cols
+        print 'rows: ',rows
+
         return cols, rows
 
 
     def create_geotransform(self,x_rotation=0,y_rotation=0):
-        '''create geotransformation parameters using the class's 2D output
-        projection. The inverse transformation is created to produce points from
-        pixels''' 
-        # TODO verify above statement true
+        '''Create geotransformation for converting 2D projected point from
+        pixels and inverse geotransformation to pixels (what I want, but need the
+        geotransform first).'''
 
         # TODO make sure this works with negative & positive lons
         top_left_x, top_left_y = self.transform_point(min(self.x),
@@ -107,18 +111,21 @@ cell_width_meters=50.,cell_height_meters=50.):
         pixel_x, pixel_y = gdal.ApplyGeoTransform(inverse_geo_transform,
 point_x, point_y)
 
-        #TODO figure this -1 index crap out
-        pixel_x = int(pixel_x) - 1 # adjust to 0 start for array
-        pixel_y = int(pixel_y) - 1 # adjust to 0 start for array
+        #TODO remove offset bit when sure
+        pixel_x = int(pixel_x) # - 1 # adjust to 0 start for array
+        pixel_y = int(pixel_y) # - 1 # adjust to 0 start for array
 
-        #TODO the x was not originally abs, check
-        return abs(pixel_x), abs(pixel_y) # y pixel is likly a negative value given geo_transform
+        print 'pixel_x: ',pixel_x
+        print 'pixel_y: ',pixel_y
+        #TODO remove # y pixel is likly a negative value given geo_transform
+        return pixel_x, pixel_y 
 
 
     def create_raster(self, filename="data2raster.tiff", output_format="GTiff", cell_width_meters=1000., cell_height_meters=1000.):
         '''Create raster image of data using gdal bindings'''
 
         # create empty raster
+        current_dir = os.getcwd()+'/'
         driver = gdal.GetDriverByName(output_format)
         number_of_bands = 1
         band_type = gdal.GDT_Float32
@@ -131,18 +138,18 @@ point_x, point_y)
         # convert GeoPoint object points to pixels
         pixel_x = list()
         pixel_y = list()
+
         # convert points to projected format for inverse geotransform
         # conversion to pixels
         points_x, points_y = self.transform_point()
+        cols, rows = self.get_raster_size(points_x, points_y, cell_width_meters, cell_height_meters)
         for point_x, point_y in zip(points_x,points_y):
             # apply value to array
             x, y = self.point_to_pixel(point_x, point_y, inverse_geotransform)
             pixel_x.append(x)
             pixel_y.append(y)
 
-        cols, rows = self.get_raster_size(points_x, points_y, cell_width_meters, cell_height_meters)
-
-        dataset = driver.Create(filename, cols, rows, number_of_bands, band_type)
+        dataset = driver.Create(current_dir+filename, cols, rows, number_of_bands, band_type)
 
         # Set geographic coordinate system to handle lat/lon
         srs = osr.SpatialReference()
@@ -176,10 +183,15 @@ point_x, point_y)
 
 if __name__ == '__main__':
     # example coordinates, with function test
-    lat = [45.3,50.2,47.4]
-    lon = [134.6,136.2,136.9]
-    val = [3,6,2]
+    lat = [45.3,50.2,47.4,80.1]
+    lon = [134.6,136.2,136.9,0.5]
+    val = [3,6,2,8]
 
-    geo_obj =  GeoPoint(x=lon,y=lat,vals=val)
+    #generate some random lats and lons
+    import random
+    lats = [random.uniform(45,75) for r in xrange(500)]
+    lons = [random.uniform(-2,65) for r in xrange(500)]
+    vals = [random.uniform(1,15) for r in xrange(500)]
 
+    geo_obj =  GeoPoint(x=lons,y=lats,vals=vals)
     geo_obj.create_raster()
