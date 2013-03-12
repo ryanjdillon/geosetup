@@ -102,27 +102,34 @@ cell_width_meters=50.,cell_height_meters=50.):
         return geotransform, inverse_geotransform
 
 
-    def point_to_pixel(self, point_x, point_y, inverse_geo_transform):
+    def point_to_pixel(self, point_x, point_y, inverse_geotransform):
         """Translates points from input projection (using the inverse
         transformation of the output projection) to the grid pixel coordinates in data
         array (zero start)""" 
 
         # apply inverse geotranformation to convert to pixels
-        pixel_x, pixel_y = gdal.ApplyGeoTransform(inverse_geo_transform,
-point_x, point_y)
-
-        #TODO remove offset bit when sure
-        pixel_x = int(pixel_x) # - 1 # adjust to 0 start for array
-        pixel_y = int(pixel_y) # - 1 # adjust to 0 start for array
+        pixel_x, pixel_y = gdal.ApplyGeoTransform(inverse_geotransform,
+                                                  point_x, point_y)
 
         print 'pixel_x: ',pixel_x
         print 'pixel_y: ',pixel_y
-        #TODO remove # y pixel is likly a negative value given geo_transform
+
         return pixel_x, pixel_y 
 
+    def pixel_to_point(self, pixel_x, pixel_y, geotransform):
+        """Translates grid pixels coordinates to output projection points 
+        (using the geotransformation of the output projection)"""
 
-    def create_raster(self, filename="data2raster.tiff", output_format="GTiff", cell_width_meters=1000., cell_height_meters=1000.):
+        point_x, point_y = gdal.ApplyGeoTransform(geotransform, pixel_x, pixel_y)
+        return point_x, point_y
+
+    def create_raster(self, in_x=None, in_y=None, filename="data2raster.tiff", output_format="GTiff", cell_width_meters=1000., cell_height_meters=1000.):
         '''Create raster image of data using gdal bindings'''
+        # if coords not provided, use default values from object
+        if x is None:
+            in_x = self.x
+        if y is None:
+            in_y = self.y
 
         # create empty raster
         current_dir = os.getcwd()+'/'
@@ -141,7 +148,7 @@ point_x, point_y)
 
         # convert points to projected format for inverse geotransform
         # conversion to pixels
-        points_x, points_y = self.transform_point()
+        points_x, points_y = self.transform_point(in_x,in_y)
         cols, rows = self.get_raster_size(points_x, points_y, cell_width_meters, cell_height_meters)
         for point_x, point_y in zip(points_x,points_y):
             # apply value to array
@@ -182,6 +189,8 @@ point_x, point_y)
 #################
 
 if __name__ == '__main__':
+    import datainterp
+
     # example coordinates, with function test
     lat = [45.3,50.2,47.4,80.1]
     lon = [134.6,136.2,136.9,0.5]
@@ -192,6 +201,8 @@ if __name__ == '__main__':
     lats = [random.uniform(45,75) for r in xrange(500)]
     lons = [random.uniform(-2,65) for r in xrange(500)]
     vals = [random.uniform(1,15) for r in xrange(500)]
+
+    datainterp.geo_interp(lats,lons,vals)
 
     geo_obj =  GeoPoint(x=lons,y=lats,vals=vals)
     geo_obj.create_raster()
