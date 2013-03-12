@@ -2,13 +2,14 @@ import numpy as np
 from scipy.interpolate import RectSphereBivariateSpline
 
 def geointerp(lats,lons,data,grid_size_deg, mesh=False):
-    '''We want to interpolate it to a global one-degree grid'''
+    '''We want to interpolate it to a global x-degree grid'''
     deg2rad = np.pi/180.
     new_lats = np.linspace(grid_size_deg, 180, 180/grid_size_deg)
     new_lons = np.linspace(grid_size_deg, 360, 360/grid_size_deg)
     new_lats_mesh, new_lons_mesh = np.meshgrid(new_lats*deg2rad, new_lons*deg2rad)
 
     '''We need to set up the interpolator object'''
+    lats = [float(lat) for lat in lats]
     print lats*deg2rad
     lut = RectSphereBivariateSpline(lats*deg2rad, lons*deg2rad, data)
 
@@ -16,26 +17,14 @@ def geointerp(lats,lons,data,grid_size_deg, mesh=False):
     object only takes 1-D arrays as input, therefore we need to do some reshaping.'''
     new_lats = new_lats_mesh.ravel()
     new_lons = new_lons_mesh.ravel()
-    data_interp_mesh = lut.ev(new_lats,new_lons).reshape((360/grid_size_deg,
-                                                          180/grid_size_deg)).T
-    '''Using pythagorean theorem to add data u / v vector components to single value,
-    the combine them to single numpy array''' 
-    # TODO could remove, just need non-shaped values
-    data_interp = list()
+    data_interp = lut.ev(new_lats,new_lons)
 
-    for i in range(len(data_interp_mesh[:,0])):
-        newvals = pow((pow(data_interp_mesh[i,:],2.0)+pow(data_interp_mesh[i,:],2.0)),1/2.0)
-        data_interp.extend(newvals)
-    # TODO end todo
+    if mesh == True:
+        data_interp = data_interp.reshape((360/grid_size_deg,
+                                           180/grid_size_deg)).T
 
-    return new_lats, new_lons, data_interp_mesh
+    return new_lats/deg2rad, new_lons/deg2rad, data_interp
 
-def convert_data(interp_object):
-    ''' add here ''' #TODO finish description
-    a = interp_object
-    b = interp_object
-    c = pow((pow(data_interp[0,:],2.0)+pow(data_interp[:,0],2.0)),1/2.0)
-    return lats, lons, data
 
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
@@ -47,8 +36,8 @@ if __name__ == '__main__':
                     np.atleast_2d(180. - np.abs(np.linspace(0., 350., 9)))).T
 
     # interpolate data to 1 degree grid
-    new_lats, new_lons, data_interp = geointerp(lats,lons,data,2)
-
+    new_lats, new_lons, data_interp = geointerp(lats,lons,data,10,mesh=False)
+    print len(new_lats), len(data_interp)
 
     '''Looking at the original and the interpolated data,
     one can see that the interpolant reproduces the original data very well'''

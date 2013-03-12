@@ -189,7 +189,6 @@ cell_width_meters=50.,cell_height_meters=50.):
 #################
 
 if __name__ == '__main__':
-    import datainterp
 
     # example coordinates, with function test
     lat = [45.3,50.2,47.4,80.1]
@@ -197,12 +196,18 @@ if __name__ == '__main__':
     val = [3,6,2,8]
 
     #generate some random lats and lons
-    import random
-    lats = [random.uniform(45,75) for r in xrange(500)]
-    lons = [random.uniform(-2,65) for r in xrange(500)]
-    vals = [random.uniform(1,15) for r in xrange(500)]
+#    import random
+#    lats = [random.uniform(45,75) for r in xrange(500)]
+#    lons = [random.uniform(-2,65) for r in xrange(500)]
+#    vals = [random.uniform(1,15) for r in xrange(500)]
 
-    datainterp.geo_interp(lats,lons,vals)
+    lats = np.random.uniform(45,75,500)
+    lons = np.random.uniform(-2,65,500)
+    vals = np.random.uniform(1,25,500)
+
+    #test data interpolation
+    import datainterp
+    lats, lons, vals = datainterp.geointerp(lats,lons,vals,2,mesh=False)
 
     geo_obj =  GeoPoint(x=lons,y=lats,vals=vals)
     geo_obj.create_raster()
