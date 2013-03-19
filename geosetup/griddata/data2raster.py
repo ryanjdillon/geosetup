@@ -68,7 +68,6 @@ cell_width_meters=50.,cell_height_meters=50.):
         cols = int(((max(point_x) - min(point_x)) / cell_width_meters)+1)
         rows = int(((max(point_y) - min(point_y)) / abs(cell_height_meters))+1)
 
-        print 'f',(max(point_x)-min(point_x))/cell_width_meters
         print 'cols: ',cols
         print 'rows: ',rows
 
@@ -105,16 +104,13 @@ cell_width_meters=50.,cell_height_meters=50.):
     def point_to_pixel(self, point_x, point_y, inverse_geotransform):
         """Translates points from input projection (using the inverse
         transformation of the output projection) to the grid pixel coordinates in data
-        array (zero start)""" 
+        array (zero start)"""
 
         # apply inverse geotranformation to convert to pixels
         pixel_x, pixel_y = gdal.ApplyGeoTransform(inverse_geotransform,
                                                   point_x, point_y)
 
-        print 'pixel_x: ',pixel_x
-        print 'pixel_y: ',pixel_y
-
-        return pixel_x, pixel_y 
+        return pixel_x, pixel_y
 
     def pixel_to_point(self, pixel_x, pixel_y, geotransform):
         """Translates grid pixels coordinates to output projection points 
@@ -126,9 +122,9 @@ cell_width_meters=50.,cell_height_meters=50.):
     def create_raster(self, in_x=None, in_y=None, filename="data2raster.tiff", output_format="GTiff", cell_width_meters=1000., cell_height_meters=1000.):
         '''Create raster image of data using gdal bindings'''
         # if coords not provided, use default values from object
-        if x is None:
+        if in_x is None:
             in_x = self.x
-        if y is None:
+        if in_y is None:
             in_y = self.y
 
         # create empty raster
@@ -204,10 +200,10 @@ if __name__ == '__main__':
     lats = np.random.uniform(45,75,500)
     lons = np.random.uniform(-2,65,500)
     vals = np.random.uniform(1,25,500)
-
+    print 'lats ',lats.shape
     #test data interpolation
     import datainterp
     lats, lons, vals = datainterp.geointerp(lats,lons,vals,2,mesh=False)
-
+    print 'lons ',lons.shape
     geo_obj =  GeoPoint(x=lons,y=lats,vals=vals)
     geo_obj.create_raster()

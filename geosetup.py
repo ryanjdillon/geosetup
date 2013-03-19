@@ -1,19 +1,22 @@
-#!/usr/bin/env python
+#/usr/bin/env python
 
 from mpl_toolkits.basemap import Basemap
 import matplotlib.pyplot as plt
 import numpy as np
 import sys
-#TODO change to use pyproj geod.fwd() and geod.inv()
-import geosetup.spheredistance as sd
-from geosetup.cortad import getCortad
+import re
 import datetime
-import geosetup.mpl_util
+import numpy.lib.recfunctions
+import pyproj
 from StringIO import StringIO
+import geosetup.mpl_util
+from geosetup.cortad import getCortad
 from geosetup.griddata import invdistgis
 from geosetup.griddata import data2raster
 from geosetup.griddata.datainterp import geointerp
-import numpy.lib.recfunctions
+
+# prevent creation of .pyc files
+sys.dont_write_bytecode = True
 
 #############
 # Functions #
@@ -33,34 +36,35 @@ def plotSizedData(lats,lons,values,plot_symbol,min_marker_size,max_marker_size):
         m.plot(x, y, plot_symbol, markersize=msize)
 
 def centerMap(lats,lons,scale):
-    ''' Set range of map '''
-
-    # Assumes -90 < Lat < 90 and -180 < Lon < 180, and
-    # latitude and logitude are in decimal degrees
-    earth_radius = 6378100.0 #earth's radius in meters TODO make consistent with SST data
+    ''' Set range of map. Assumes -90 < Lat < 90 and -180 < Lon < 180, and
+    latitude and logitude are in decimal degrees'''
 
     north_lat = max(lats)
     south_lat = min(lats)
     west_lon = max(lons)
     east_lon = min(lons)
 
+    # find center of data
     # average between max and min longitude
     lon0 = ((west_lon-east_lon)/2.0)+east_lon
 
-    ''' distance_on_unit_sphere(lat1, long1, lat2, long2)'''
-    # a = the height of the map
-    b = sd.spheredist(north_lat,west_lon,north_lat,east_lon)*earth_radius/2
-    c = sd.spheredist(north_lat,west_lon,south_lat,lon0)*earth_radius
+    # define ellipsoid object for distance measurements
+    g = pyproj.Geod(ellps='WGS84') # Use WGS84 ellipsoid TODO make variable
+    earth_radius = g.a # earth's radius in meters
 
-    # use pythagorean theorom to determine height of plot
-    mapH = pow(pow(c,2)-pow(b,2),1./2)
-    arc_center = (mapH/2)/earth_radius
+    # Use pythagorean theorom to determine height of plot
+    # divide b_dist by 2 to get width of triangle from center to edge of data area
+    # inv returns [0]forward azimuth, [1]back azimuth, [2]distance between
 
-    lat0 = sd.secondlat(south_lat,arc_center)
+    # a_dist = the height of the map (i.e. mapH)
+    b_dist = g.inv(west_lon,north_lat,east_lon,north_lat)[2]/2
+    c_dist = g.inv(west_lon,north_lat,lon0,south_lat)[2]
 
-    # distance between max E and W longitude at most souther latitude
-    mapW = sd.spheredist(south_lat,west_lon,
-                            south_lat,east_lon)*earth_radius
+    mapH = pow(pow(c_dist,2)-pow(b_dist,2),1./2)
+    lat0 = g.fwd(lon0,south_lat,0,mapH/2)[1]
+
+    # distance between max E and W longitude at most southern latitude
+    mapW = g.inv(west_lon,south_lat,east_lon,south_lat)[2]
 
     return lat0,lon0,mapW*scale,mapH*scale
 
@@ -99,11 +103,9 @@ if __name__ == '__main__':
     # Commandline Usage #
     #####################
 
-    print '\n'
     if len(sys.argv) < 3:
-        print >>sys.stderr,'Usage:',sys.argv[0],'<datafile> <#rows to skip>'
+        print >>sys.stderr,'\nUsage:',sys.argv[0],'<datafile> <#rows to skip>\n'
         sys.exit(1)
-    print '\n'
 
     ##############
     # Setup Data #
@@ -147,6 +149,19 @@ if __name__ == '__main__':
     #######################################
     # Calculate Sightings per unit effort #
     #######################################
+    # TODO calculate distance between start points and sighting point and compare
+    g = pyproj.Geod(ellps='WGS84') # Use WGS84 ellipsoid
+    f_azimuth, b_azimuth, dist = g.inv(data['lon'],data['lat'],data['lon0'],data['lat0'])
+    # get create array of indexs for minke whales
+    # 'BA' Minke whales (Balaenoptera acutorostrata)
+    # 'BM' Blue Whale (Balaenoptera musculus)
+    # 'BP' Fin Whale (Balaenoptera physalus)
+    def filter2idx(regexp,array):
+        return np.array([bool(re.search(regexp, element)) for element in array])
+
+    minke_idx = filter2idx('BA',data['species'])
+    print minke_idx
+
     # generate list of indexes where effort was greater than zero
     effort_idx = np.where(data['effort_sec']*data['effort_nmil'] != 0)
 
@@ -161,7 +176,8 @@ if __name__ == '__main__':
     ##########################
     #TODO write data to tiff #
     ##########################
-    data2raster.create_raster(data['lon'],data['lat'],data['spue'],filename="spue.tiff",output_format="GTiff")
+    spueGeopoint = data2raster.GeoPoint(data['lon'],data['lat'],data['spue'])
+    spueGeopoint.create_raster(filename="spue.tiff",output_format="GTiff")
 
     #########################
     # Get Cortad Data - SST #

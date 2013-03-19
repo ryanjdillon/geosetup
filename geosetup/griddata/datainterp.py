@@ -9,8 +9,8 @@ def geointerp(lats,lons,data,grid_size_deg, mesh=False):
     new_lats_mesh, new_lons_mesh = np.meshgrid(new_lats*deg2rad, new_lons*deg2rad)
 
     '''We need to set up the interpolator object'''
-    lats = [float(lat) for lat in lats]
-    print lats*deg2rad
+   # lats = [float(lat) for lat in lats]
+    print lats*2#*deg2rad
     lut = RectSphereBivariateSpline(lats*deg2rad, lons*deg2rad, data)
 
     '''Finally we interpolate the data. The RectSphereBivariateSpline
