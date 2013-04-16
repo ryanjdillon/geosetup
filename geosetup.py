@@ -121,27 +121,27 @@ if __name__ == '__main__':
         io = StringIO(fh.read().replace(',', '\t'))
 
     record_types = np.dtype([
-                    ('vessel',str,1),               #0 - Vessel ID
-                    ('dates',str,6),                #1 - Date
-                    ('times',str,6),                #2 - Time (local?)
-                    ('lat',float),                  #3 - latitude dec
-                    ('lon',float),                  #4 - longitude dec -1
-                    ('beafort',str,2),              #5 - beafort scale
-                    ('weather',int),                #6 - weather code
-                    ('visibility',int),             #7 - visibility code
-                    ('effort_sec',float),           #8 - seconds on effort
-                    ('effort_nmil',float),          #9 - n miles on effort
-                    ('lat0',float),                 #10 - lat of sight start
-                    ('lon0',float),                 #11 - lon of sight start
-                    ('num_observers',int),          #12 - number of observers
-                    ('species',str,6),              #13 - species codes
-                    ('num_animals',int),            #14 - number observed
-                    ('sighting',int),               #15 - Boolean sight code
-                    ('rdist',float),                #16 - distance to sight
-                    ('angle',float),                #17 - angel from ship
-                    ('blocktrack',str,2),           #18 - cruise block
-                    ('leg',int),                    #19 - cruise leg code
-                    ('observations',str,25),        #20 - cruise obs codes
+                    ('vessel',str,1),           #00 - Vessel ID
+                    ('dates',str,6),            #01 - Date
+                    ('times',str,6),            #02 - Time (local?)
+                    ('lat',float),              #03 - latitude dec
+                    ('lon',float),              #04 - longitude dec -1
+                    ('beafort',str,2),          #05 - beafort scale
+                    ('weather',int),            #06 - weather code
+                    ('visibility',int),         #07 - visibility code
+                    ('effort_sec',float),       #08 - seconds on effort
+                    ('effort_nmil',float),      #09 - n miles on effort
+                    ('lat0',float),             #10 - lat of sight start
+                    ('lon0',float),             #11 - lon of sight start
+                    ('num_observers',int),      #12 - number of observers
+                    ('species',str,6),          #13 - species codes
+                    ('num_animals',int),        #14 - number observed
+                    ('sighting',int),           #15 - Boolean sight code
+                    ('rdist',float),            #16 - distance to sight
+                    ('angle',float),            #17 - angel from ship
+                    ('blocktrack',str,2),       #18 - cruise block
+                    ('leg',int),                #19 - cruise leg code
+                    ('observations',str,25),    #20 - cruise obs codes
                     ])
 
     data = np.genfromtxt(io,dtype=record_types,delimiter='\t',skip_header=rows_to_skip)
@@ -149,18 +149,34 @@ if __name__ == '__main__':
     #######################################
     # Calculate Sightings per unit effort #
     #######################################
+
+    # 'BM' Blue Whale (Balaenoptera musculus)
+    # 'BP' Fin Whale (Balaenoptera physalus)
+    # 'BB' Sei Whale (Balaenoptera borealis)
+    # 'BA' Minke whales (Balaenoptera acutorostrata)
+    # 'MN' Humpback Whale (Megaptera novaeangliae)
+
+    def filter2bool(regexp,array):
+        '''
+        Create array of positive boolean where elements match regex 
+        '''
+        return np.array([bool(re.search(regexp, element)) for element in array])
+
     # TODO calculate distance between start points and sighting point and compare
     g = pyproj.Geod(ellps='WGS84') # Use WGS84 ellipsoid
     f_azimuth, b_azimuth, dist = g.inv(data['lon'],data['lat'],data['lon0'],data['lat0'])
     # get create array of indexs for minke whales
-    # 'BA' Minke whales (Balaenoptera acutorostrata)
-    # 'BM' Blue Whale (Balaenoptera musculus)
-    # 'BP' Fin Whale (Balaenoptera physalus)
-    def filter2idx(regexp,array):
-        return np.array([bool(re.search(regexp, element)) for element in array])
 
-    minke_idx = filter2idx('BA',data['species'])
-    print minke_idx
+    #TODO verify the effort calc is correct
+    minke_idx = np.where(filter2bool('BA',data['species'])==True)[0]
+
+    last_idx = 0
+    idx_pos = 0
+    minke_effort = np.zeros_like(minke_idx, dtype=float)
+    for idx in minke_idx:
+        minke_effort[idx_pos] = dist[last_idx:(idx+1)].sum()
+        last_idx = idx
+        idx_pos = idx_pos+1
 
     # generate list of indexes where effort was greater than zero
     effort_idx = np.where(data['effort_sec']*data['effort_nmil'] != 0)
@@ -249,8 +265,9 @@ if __name__ == '__main__':
     proj = None
     # TODO create ogr SpatialReference object for projection
     #proj= list('GEOGCS["GCS_WGS_1984",DATUM["WGS_1984",SPHEROID["WGS_84",6378137,298.257223563]],PRIMEM["Greenwich",0],UNIT["Degree",0.017453292519943295]]')
-    xSize= 200#mapWidth
-    ySize= 200#mapHeight
+
+    xSize= 200 # mapWidth
+    ySize= 200 # mapHeight
     power=2.0
     smoothing=0.0
     driverName='GTiff'
