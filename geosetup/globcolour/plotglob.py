@@ -7,6 +7,10 @@ import csv
 import datetime
 from mpl_toolkits.basemap import Basemap
 import matplotlib.pyplot as plt
+'''
+extract globcolour chlorophyll data from netCDFs
+__author__: Ryan J. Dillon
+'''
 
 #############
 # Functions #
@@ -15,9 +19,9 @@ import matplotlib.pyplot as plt
 def subset_coord_data(max_lon, min_lon, max_lat, min_lat,lons, lats, values):
     '''subset_coord_data  returns a subset of lat/lon/value data from defined
        defined bounds in decimal degrees'''
-    subset_lons = lons[(lons<max_lon)&(lons>min_lon)&(lats<max_lat)&(lats>min_lat)] 
-    subset_lats = lats[(lons<max_lon)&(lons>min_lon)&(lats<max_lat)&(lats>min_lat)] 
-    subset_vals = values[(lons<max_lon)&(lons>min_lon)&(lats<max_lat)&(lats>min_lat)] 
+    subset_lons = lons[(lons<max_lon)&(lons>min_lon)&(lats<max_lat)&(lats>min_lat)]
+    subset_lats = lats[(lons<max_lon)&(lons>min_lon)&(lats<max_lat)&(lats>min_lat)]
+    subset_vals = values[(lons<max_lon)&(lons>min_lon)&(lats<max_lat)&(lats>min_lat)]
     return subset_lons, subset_lats, subset_vals
 
 ################
@@ -34,15 +38,17 @@ if __name__ == '__main__':
         sys.exit(1)
 
 #       nc_file = '/home/ryan/Desktop/asf-fellowship/code/globcolour/L3b_20070101__GLOB_4_GSM-MERMODSWF_CHL1_DAY_00.nc'
-    print sys.argv[1:]
+
+#    print sys.argv[1:]
 
     for datafile in sys.argv[1:]: # must provide dir with wildcard: ./*nc
+        print datafile
         nc_filepath, nc_filename = os.path.split(datafile)
         file_date = re.split('[._]', nc_filename)[1]
 
         # import data as numpy array, then get colums
         #nc_dataset = Dataset(nc_file,'r')
-        nc_dataset = Dataset(nc_filename,'r')
+        nc_dataset = Dataset(datafile,'r')
         nc_rows = nc_dataset.variables["row"][:]
         nc_cols = nc_dataset.variables["col"][:]
         nc_vals = nc_dataset.variables["CHL1_mean"][:]

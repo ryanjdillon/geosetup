@@ -12,6 +12,7 @@ from StringIO import StringIO
 import geosetup.mpl_util
 from geosetup.cortad import getCortad
 from geosetup.griddata import invdistgis
+from geosetup.griddata import invdist
 from geosetup.griddata import data2raster
 from geosetup.griddata.datainterp import geointerp
 
@@ -22,23 +23,33 @@ sys.dont_write_bytecode = True
 # Functions #
 #############
 
-def plotSizedData(lats,lons,values,plot_symbol,min_marker_size,max_marker_size):
-    ''' Plot data with varying sizes '''
+def plotSizedData(map_obj,lons,lats,values,symbol,min_size,max_size,lines=False):
+    '''
+    Plot data with varying sizes
+    '''
+    proj_x,proj_y = m(lons,lats)
 
     # Calculate marker sizes using y=mx+b
     # where y = marker size and x = data value
-    slope = (max_marker_size-min_marker_size)/(max(values)-min(values))
-    intercept = min_marker_size-(slope*min(values))
+    slope = (max_size-min_size)/(max(values)-min(values))
+    intercept = min_size-(slope*min(values))
 
-    for lon, lat, val in zip(lons, lats, values):
+    for x, y, val in zip(proj_x, proj_y, values):
         msize = (slope*val)+intercept
-        x,y = m(lon,lat)
-        m.plot(x, y, plot_symbol, markersize=msize)
+        map_obj.plot(x, y, symbol, markersize=msize)
 
-def centerMap(lats,lons,scale):
-    ''' Set range of map. Assumes -90 < Lat < 90 and -180 < Lon < 180, and
-    latitude and logitude are in decimal degrees'''
+def plotLines(map_obj,lons,lats,lw=1.0,color='k'):
+    '''
+    Draw a line between each set of coordinates
+    '''
+    for i in range(len(lons)-1):
+        map_obj.drawgreatcircle(lons[i],lats[i],lons[i+1],lats[i+1],linewidth=1.0,color='k')
 
+def centerMap(lons,lats,scale):
+    '''
+    Set range of map. Assumes -90 < Lat < 90 and -180 < Lon < 180, and
+    latitude and logitude are in decimal degrees
+    '''
     north_lat = max(lats)
     south_lat = min(lats)
     west_lon = max(lons)
@@ -66,13 +77,13 @@ def centerMap(lats,lons,scale):
     # distance between max E and W longitude at most southern latitude
     mapW = g.inv(west_lon,south_lat,east_lon,south_lat)[2]
 
-    return lat0,lon0,mapW*scale,mapH*scale
+    return lon0,lat0,mapW*scale,mapH*scale
 
 def drawSST(ax,map_object,longSST,latSST,filledSST,myalpha):
-    ''' Draw Sea surface temperature - Trond Kristiansen '''
-
-    #fig = plt.figure(figsize=(12,12))
-    # Input arrays has to be 2D
+    '''
+    Draw Sea surface temperature - Trond Kristiansen
+    '''
+    # Input arrays have to be 2D
     print "Drawing SST: max %s and min %s"%(filledSST.min(), filledSST.max())
     x2, y2 = map_object(longSST,latSST)
     levels=np.arange(2,18,0.5)
@@ -89,14 +100,24 @@ def drawSST(ax,map_object,longSST,latSST,filledSST,myalpha):
                 cmap=plt.cm.jet,
                 extend='upper',alpha=myalpha)
 
+        # TODO correct or remove
         #CS2 = map_object.contourf(x2,y2,filledSST,levels,
         #               cmap=mpl_util.LevelColormap(levels,cmap=cm.Greys),
         #               extend='upper',alpha=myalpha)
 
 def find_nearest(array,value):
+    '''
+    TODO
+    '''
     idx = (np.abs(array-value)).argmin()
     #return array[idx] # return value
     return idx # return index
+
+def filter2bool(regexp,array):
+    '''
+    Create array of positive boolean where elements match regex 
+    '''
+    return np.array([bool(re.search(regexp, element)) for element in array])
 
 if __name__ == '__main__':
     #####################
@@ -110,16 +131,23 @@ if __name__ == '__main__':
     ##############
     # Setup Data #
     ##############
-
     data_file = sys.argv[1]
+
     if sys.argv[2]:
         rows_to_skip = int(sys.argv[2])
     else:
         rows_to_skip = 0
 
+    prj_dir = '/home/ryan/Desktop/asf-fellowship/code/geosetup/'
+    sst_dir = 'data/pathfinder/'
+    chl_dir = 'data/globcolour/'
+    btm_dir = 'data/gebco/'
+
+    # TODO double check if following is necessary
     with open(data_file) as fh:
         io = StringIO(fh.read().replace(',', '\t'))
 
+    # Define names and data types for sighting data
     record_types = np.dtype([
                     ('vessel',str,1),           #00 - Vessel ID
                     ('dates',str,6),            #01 - Date
@@ -139,12 +167,36 @@ if __name__ == '__main__':
                     ('sighting',int),           #15 - Boolean sight code
                     ('rdist',float),            #16 - distance to sight
                     ('angle',float),            #17 - angel from ship
-                    ('blocktrack',str,2),       #18 - cruise block
+                    ('block',str,2),       #18 - cruise block
                     ('leg',int),                #19 - cruise leg code
                     ('observations',str,25),    #20 - cruise obs codes
                     ])
 
+    # Import data to structured array
     data = np.genfromtxt(io,dtype=record_types,delimiter='\t',skip_header=rows_to_skip)
+
+    # Correct longitude values
+    data['lon'] = data['lon']*(-1)
+
+    # Create array of unique survey block IDs
+    blocks = np.unique(data['block'])
+
+    # Get date information for subsampling environment data
+    dates = list()
+    for data_date,data_time in zip(data['dates'],data['times']):
+        data_datetime = data_date+data_time
+        dates.append(datetime.datetime.strptime(data_datetime, '%y%m%d%H%M%S'))
+
+    data_start = min(dates)
+    data_end = max(dates)
+
+    # Print a summary of geo data 
+    print '\nGeo Data Information'
+    print '-------------------------------------------'
+    print 'Data Path: '+data_file
+    print 'First sighting: ',data_start
+    print 'Last sighting: ',data_end
+
 
     #######################################
     # Calculate Sightings per unit effort #
@@ -156,58 +208,52 @@ if __name__ == '__main__':
     # 'BA' Minke whales (Balaenoptera acutorostrata)
     # 'MN' Humpback Whale (Megaptera novaeangliae)
 
-    def filter2bool(regexp,array):
-        '''
-        Create array of positive boolean where elements match regex 
-        '''
-        return np.array([bool(re.search(regexp, element)) for element in array])
-
     # TODO calculate distance between start points and sighting point and compare
-    g = pyproj.Geod(ellps='WGS84') # Use WGS84 ellipsoid
-    f_azimuth, b_azimuth, dist = g.inv(data['lon'],data['lat'],data['lon0'],data['lat0'])
-    # get create array of indexs for minke whales
+#    g = pyproj.Geod(ellps='WGS84') # Use WGS84 ellipsoid
+#    f_azimuth, b_azimuth, dist = g.inv(data['lon'],data['lat'],data['lon0'],data['lat0'])
 
-    #TODO verify the effort calc is correct
+    # get create array of indexes for minke whales
+    # TODO verify the effort calc is correct
     minke_idx = np.where(filter2bool('BA',data['species'])==True)[0]
+    minke_effort = data['effort_nmil'][minke_idx]
+    minke_lat = data['lat'][minke_idx]
+    minke_lon = data['lon'][minke_idx]
 
-    last_idx = 0
-    idx_pos = 0
-    minke_effort = np.zeros_like(minke_idx, dtype=float)
-    for idx in minke_idx:
-        minke_effort[idx_pos] = dist[last_idx:(idx+1)].sum()
-        last_idx = idx
-        idx_pos = idx_pos+1
+    minke_proj = data2raster.GeoPoint(minke_lon,minke_lat,minke_effort)
+    minke_x, minke_y = minke_proj.transform_point()
+
+    ZI = invdist.invDist(minke_lat,minke_lon, minke_effort)
+
+    XI, YI = np.meshgrid(minke_x, minke_y)
+    n = plt.normalize(0.0, 1000.0)
+    plt.subplot(1, 1, 1)
+    plt.pcolor(XI, YI, ZI)
+#    plt.scatter(xv, yv, 100, values)
+    plt.colorbar()
+    plt.show()
+
+
+#    last_idx = 0
+#    idx_pos = 0
+#    minke_effort = np.zeros_like(minke_idx, dtype=float)
+#    for idx in minke_idx:
+#        minke_effort[idx_pos] = dist[last_idx:(idx+1)].sum()
+#        last_idx = idx
+#        idx_pos = idx_pos+1
 
     # generate list of indexes where effort was greater than zero
-    effort_idx = np.where(data['effort_sec']*data['effort_nmil'] != 0)
+#    effort_idx = np.where(data['effort_sec']*data['effort_nmil'] != 0)
 
-    spue = data['num_animals'][effort_idx]/(data['effort_sec'][effort_idx]*data['effort_nmil'][effort_idx])
+#    spue = data['num_animals'][effort_idx]/(data['effort_sec'][effort_idx]*data['effort_nmil'][effort_idx])
 
     # append spue calculations to structured array dataset
-    data = numpy.lib.recfunctions.append_fields(data,'spue',data=spue)
-
-    # Correct longitude direction
-    data['lon'] = data['lon']*(-1)
-
-    ##########################
-    #TODO write data to tiff #
-    ##########################
-    spueGeopoint = data2raster.GeoPoint(data['lon'],data['lat'],data['spue'])
-    spueGeopoint.create_raster(filename="spue.tiff",output_format="GTiff")
+#    data = numpy.lib.recfunctions.append_fields(data,'spue',data=spue)
 
     #########################
     # Get Cortad Data - SST #
     #########################
     ref_date=datetime.datetime(1980,12,31,12,0,0)
-
-    dates = list()
-    for data_date,data_time in zip(data['dates'],data['times']):
-        data_datetime = data_date+data_time
-        dates.append(datetime.datetime.strptime(data_datetime, '%y%m%d%H%M%S'))
-
-    data_start = min(dates)
-    data_end = max(dates)
-    days = 60*60*24
+    days = 60.*60.*24. # sec*min*hr
 
     # calculate days from ref date to first sighting
     time_start = int(round((data_start - ref_date).total_seconds()/days))
@@ -218,90 +264,86 @@ if __name__ == '__main__':
 
     lonSST2D, latSST2D, lonSST, latSST = getCortad.extractCoRTADLongLat()
 
-    print 'First sighting: ',data_start
-    print 'Last sighting: ',data_end
+    # Print sighting data informtion
     print 'Sighting Period: ', time_start, time_end, data_end-data_start
 
-    #####################
-    # Print Map Details #
-    #####################
+    ##########################
+    #TODO write data to tiff #
+    ##########################
 
-    lat0center,lon0center,mapWidth,mapHeight = centerMap(data['lat'],data['lon'],1.1)
+    # Create Effort Gtiff
+    #spueGeopoint = data2raster.GeoPoint(data['lon'],data['lat'],data['spue'])
+    #spueGeopoint.create_raster(filename="spue.tiff",output_format="GTiff")
 
-    print 'Plotting Data From: '+data_file
-    print "Map lat/lon center: ",lat0center,lon0center
-    print "Map height/width: ",mapWidth,mapHeight
+    # Create SST Gtiff
+    #sstGeopoint = data2raster.GeoPoint(data['lon'],data['lat'],data['spue'])
+    #sstGeopoint.create_raster(filename="spue.tiff",output_format="GTiff")
 
+    # Create Chla Gtiff
+    #chlaGeopoint = data2raster.GeoPoint(data['lon'],data['lat'],data['spue'])
+    #spueGeopoint.create_raster(filename="spue.tiff",output_format="GTiff")
 
-    ##############
-    # Create Map #
-    ##############
-    # TODO write metadata to image file
+    # Create Bathy Gtiff
+    #bathyGeopoint = data2raster.GeoPoint(data['lon'],data['lat'],data['spue'])
+    #spueGeopoint.create_raster(filename="spue.tiff",output_format="GTiff")
 
+    ###############
+    # Create Plot #
+    ###############
     fig = plt.figure(figsize=(12,12))
     ax = fig.add_subplot(111)
 
-    # setup stereographic basemap.
-    # lat_ts is latitude of true scale.
+    # Calculate map's center lat and lon from sampling data
+    lon0center,lat0center,mapWidth,mapHeight = centerMap(data['lon'],data['lat'],1.1)
+
+    # Lambert Conformal Projection Plot
+    # lat_1 is first standard parallel.
+    # lat_2 is second standard parallel (defaults to lat_1).
     # lon_0,lat_0 is central point.
+    # TODO check that following isn't more accurate from pyProj
+    # rsphere=(6378137.00,6356752.3142) specifies WGS4 ellipsoid
+    # area_thresh=1000 means don't plot coastline features less
+    # than 1000 km^2 in area.
     m = Basemap(width=mapWidth,height=mapHeight,
-                resolution='l',projection='stere',\
+                rsphere=(6378137.00,6356752.3142),\
+                resolution='l',area_thresh=1000.,projection='lcc',\
+                lat_1=45.,lat_2=55.,\
                 lat_0=lat0center,lon_0=lon0center)
 
-    #m.shadedrelief()
-    m.drawcoastlines(linewidth=0.2)
-    m.fillcontinents(color='white', lake_color='aqua')
+    # Plot STT
+    drawsst(ax,m,lonSST2D,latSST2D,filledSST,0.25)
 
-    # STT Plot
-    drawSST(ax,m,lonSST2D,latSST2D,filledSST,0.25)
+    # Plot Chl-a
+    #TODO
+    #drawchla()
 
-    ####################
-    # plot effort grid #
-    ####################
-    #Setting the default values
-    # TODO generalize this and re-add support for shapefiles, etc.
-    xv, yv = m(data['lat'],data['lon'])
-    data_values = data['spue']
-    proj = None
-    # TODO create ogr SpatialReference object for projection
-    #proj= list('GEOGCS["GCS_WGS_1984",DATUM["WGS_1984",SPHEROID["WGS_84",6378137,298.257223563]],PRIMEM["Greenwich",0],UNIT["Degree",0.017453292519943295]]')
+    # Plot Depth
+    #TODO
+    #drawbottom()
 
-    xSize= 200 # mapWidth
-    ySize= 200 # mapHeight
-    power=2.0
-    smoothing=0.0
-    driverName='GTiff'
-    outFile = 'effort_interpolation'
-
-    xMin,yMin = m(min(data['lat']),min(data['lon']))
-    xMax,yMax = m(max(data['lat']),max(data['lon']))
-    geotransform=[]
-    geotransform.append(float(xMin))
-    geotransform.append(float((xMax-xMin)/xSize))
-    geotransform.append(float(0.0))
-    geotransform.append(float(yMax))
-    geotransform.append(float(0.0))
-    geotransform.append(float((yMin-yMax)/ySize))
-    print geotransform
-
-    # draw parallels and meridians.
+    # Draw parallels and meridians.
     m.drawparallels(np.arange(-80.,81.,20.), labels=[1,0,0,0], fontsize=10)
     m.drawmeridians(np.arange(-180.,181.,20.), labels=[0,0,0,1], fontsize=10)
     m.drawmapboundary(fill_color='aqua')
+    m.drawcoastlines(linewidth=0.2)
+    m.fillcontinents(color='white', lake_color='aqua')
 
-    plotSizedData(data['lat'],data['lon'],spue,'ro',4,20)
-    #TODO get interpolation etc working
-    #ti = 400.0
-    #XI, YI = np.meshgrid(ti, ti)
-    #ZI = invdistgis.invDist(xv,yv,data_values,geotransform,proj,xSize,ySize,power,smoothing,driverName,outFile)
-    #plt.pcolor(XI, YI, ZI)
-
-    # TODO cleanup leftovers from Trond script
-    #plot data points
+    # Plot data points
+    plotSizedData(m,minke_lon,minke_lat,minke_effort,'ro',4,20)
+    plotLines(m,data['lon'],data['lat'],lw=1.0,color='k')
     #x, y = m(data['lon'],data['lat'])
     #m.scatter(x,y,2,marker='o',color='k')
+
+    # Print Plot Information
+    print '\nPlot Information'
+    print '-------------------------------------------'
+    print "Map lat/lon center: ",lat0center,lon0center
+    print "Map height/width: ",mapWidth,mapHeight
+    # TODO write metadata to image file
+    # http://stackoverflow.com/questions/10532614/can-matplotlib-add-metadata-to-saved-figures
     #plt.title("Example")
     #plotfile='SST_northsea_'+str(currentDate)+'.png'
     #print "Saving map to file %s"%(plotfile)
     #plt.savefig(plotfile)
+
     plt.show()
