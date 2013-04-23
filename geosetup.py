@@ -128,20 +128,30 @@ if __name__ == '__main__':
         print >>sys.stderr,'\nUsage:',sys.argv[0],'<datafile> <#rows to skip>\n'
         sys.exit(1)
 
-    ##############
-    # Setup Data #
-    ##############
+    ############################
+    # Configuration parameters #
+    ############################
+
+    PROJ_DIR = '/home/ryan/Desktop/asf-fellowship/code/geosetup/'
+    SST_DIR = 'data/pathfinder/'
+    CHL_DIR = 'data/globcolour/'
+    BTM_DIR = 'data/gebco/'
+    GRD_SIZE = 50 #km
+    GRD_LAT_START = 40.
+    GRD_LAT_STOP = 50.
+    GRD_LON_START = -10.
+    GRD_LON_STOP = 10.
+
+    #########################
+    # Process Sighting Data #
+    #########################
+
     data_file = sys.argv[1]
 
     if sys.argv[2]:
         rows_to_skip = int(sys.argv[2])
     else:
         rows_to_skip = 0
-
-    prj_dir = '/home/ryan/Desktop/asf-fellowship/code/geosetup/'
-    sst_dir = 'data/pathfinder/'
-    chl_dir = 'data/globcolour/'
-    btm_dir = 'data/gebco/'
 
     # TODO double check if following is necessary
     with open(data_file) as fh:
@@ -191,7 +201,7 @@ if __name__ == '__main__':
     data_end = max(dates)
 
     # Print a summary of geo data 
-    print '\nGeo Data Information'
+    print '\nSighting Data Information'
     print '-------------------------------------------'
     print 'Data Path: '+data_file
     print 'First sighting: ',data_start
@@ -232,7 +242,11 @@ if __name__ == '__main__':
     plt.colorbar()
     plt.show()
 
+    # Create Effort Gtiff
+    #spueGeopoint = data2raster.GeoPoint(data['lon'],data['lat'],data['spue'])
+    #spueGeopoint.create_raster(filename="spue.tiff",output_format="GTiff")
 
+    #TODO remove following
 #    last_idx = 0
 #    idx_pos = 0
 #    minke_effort = np.zeros_like(minke_idx, dtype=float)
@@ -249,9 +263,10 @@ if __name__ == '__main__':
     # append spue calculations to structured array dataset
 #    data = numpy.lib.recfunctions.append_fields(data,'spue',data=spue)
 
-    #########################
-    # Get Cortad Data - SST #
-    #########################
+    #######################
+    # Process CorTAD Data #
+    #######################
+
     ref_date=datetime.datetime(1980,12,31,12,0,0)
     days = 60.*60.*24. # sec*min*hr
 
@@ -267,21 +282,21 @@ if __name__ == '__main__':
     # Print sighting data informtion
     print 'Sighting Period: ', time_start, time_end, data_end-data_start
 
-    ##########################
-    #TODO write data to tiff #
-    ##########################
-
-    # Create Effort Gtiff
-    #spueGeopoint = data2raster.GeoPoint(data['lon'],data['lat'],data['spue'])
-    #spueGeopoint.create_raster(filename="spue.tiff",output_format="GTiff")
-
     # Create SST Gtiff
     #sstGeopoint = data2raster.GeoPoint(data['lon'],data['lat'],data['spue'])
     #sstGeopoint.create_raster(filename="spue.tiff",output_format="GTiff")
 
+    #################################
+    # Process Globcolour Chl-a Data #
+    #################################
+
     # Create Chla Gtiff
     #chlaGeopoint = data2raster.GeoPoint(data['lon'],data['lat'],data['spue'])
     #spueGeopoint.create_raster(filename="spue.tiff",output_format="GTiff")
+
+    #################################
+    # Process Globcolour Chl-a Data #
+    #################################
 
     # Create Bathy Gtiff
     #bathyGeopoint = data2raster.GeoPoint(data['lon'],data['lat'],data['spue'])
@@ -290,6 +305,7 @@ if __name__ == '__main__':
     ###############
     # Create Plot #
     ###############
+
     fig = plt.figure(figsize=(12,12))
     ax = fig.add_subplot(111)
 
