@@ -7,6 +7,8 @@ import csv
 import datetime
 from mpl_toolkits.basemap import Basemap
 import matplotlib.pyplot as plt
+import pyproj
+
 '''
 extract globcolour chlorophyll data from netCDFs
 __author__: Ryan J. Dillon
@@ -16,8 +18,8 @@ __author__: Ryan J. Dillon
 # Functions #
 #############
 
-def subset_coord_data(max_lon, min_lon, max_lat, min_lat,lons, lats, values):
-    '''subset_coord_data  returns a subset of lat/lon/value data from defined
+def subset_geodata(max_lon, min_lon, max_lat, min_lat,lons, lats, values):
+    '''subset_geodata  returns a subset of lat/lon/value data from defined
        defined bounds in decimal degrees'''
     subset_lons = lons[(lons<max_lon)&(lons>min_lon)&(lats<max_lat)&(lats>min_lat)]
     subset_lats = lats[(lons<max_lon)&(lons>min_lon)&(lats<max_lat)&(lats>min_lat)]
@@ -81,8 +83,8 @@ if __name__ == '__main__':
         #########################
         # Create and fill array #
         #########################
-        #subset_coord_data(max_lon, min_lon, max_lat, min_lat,lons,lats,values)
-        lons, lats, vals = subset_coord_data(30,-15,65,40,lons,lats,nc_vals)
+        #subset_geodata(max_lon, min_lon, max_lat, min_lat,lons,lats,values)
+        lons, lats, vals = subset_geodata(30,-15,65,40,lons,lats,nc_vals)
 
         ##################
         # Reproject Data #
