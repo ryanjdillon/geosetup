@@ -10,6 +10,7 @@ import numpy.lib.recfunctions
 import pyproj
 from StringIO import StringIO
 import geosetup.mpl_util
+from geosetup.globcolour import plotglob_mapped
 from geosetup.cortad import getCortad
 from geosetup.griddata import invdistgis
 from geosetup.griddata import invdist
@@ -79,7 +80,7 @@ def centerMap(lons,lats,scale):
 
     return lon0,lat0,mapW*scale,mapH*scale
 
-def drawSST(ax,map_object,longSST,latSST,filledSST,myalpha):
+def drawsst(ax,map_object,longSST,latSST,filledSST,myalpha):
     '''
     Draw Sea surface temperature - Trond Kristiansen
     '''
@@ -290,17 +291,22 @@ if __name__ == '__main__':
     # Process Globcolour Chl-a Data #
     #################################
 
-    # Create Chla Gtiff
-    #chlaGeopoint = data2raster.GeoPoint(data['lon'],data['lat'],data['spue'])
-    #spueGeopoint.create_raster(filename="spue.tiff",output_format="GTiff")
+    # Extract Chl-a data
+    chla_lons, chla_lats, chla_vals = plotglob_mapped.getMappedGlobcolour(PROJ_DIR+CHL_DIR,0.,50.,30.,60.,'2007-08-01','2007-08-30')
+    chla_vals = np.ravel(chla_vals)
 
-    #################################
-    # Process Globcolour Chl-a Data #
-    #################################
+    # Create Chla Gtiff
+    chlaGeopoint = data2raster.GeoPoint(chla_lons,chla_lats,chla_vals)
+    chlaGeopoint.create_raster(filename="chla.tiff",output_format="GTiff",
+cell_width_meters = 50000, cell_height_meters = 50000)
+
+    ############################
+    # Process Bathymetric Data #
+    ############################
 
     # Create Bathy Gtiff
     #bathyGeopoint = data2raster.GeoPoint(data['lon'],data['lat'],data['spue'])
-    #spueGeopoint.create_raster(filename="spue.tiff",output_format="GTiff")
+    #bathyGeopoint.create_raster(filename="bathy.tiff",output_format="GTiff")
 
     ###############
     # Create Plot #
