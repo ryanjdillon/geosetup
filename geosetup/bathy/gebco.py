@@ -1,104 +1,93 @@
 import numpy as np
 from netCDF4 import Dataset
 import sys, os
+import math
 
 #############
 # Functions #
 #############
-def coord2idx(coord, deg_range, cell_size, limit_keyword, limits):
+
+def coord2idx(coord, deg_range, cell_size, limit_keyword):
     '''Round decimal degrees or minutes to a defined limit'''
-
-    # Convert decimal degress to components
-    coord_degs = int(coord)
-    coord_mins = (coord - int(coord))*60
-    coord_secs = (coord_mins - int(coord_mins))*60
-
-    # Set options depending on deg or seconds
-    bin_size = cell_size/2. # (15*sec2deg)
-    # TODO coord_val = 
 
     # check that coordinate is valid
     if (coord < -deg_range) or (coord > deg_range):
         print '\nBathymetric grid coordinate range incorrect. Exiting.\n'
         sys.exit()
 
-    # Index offset giving value above or below, depending on keyword
+    # Calculate index position from provided coordinate
+    idx = (coord/cell_size)+(deg_range/cell_size)
+
+    # Round index to integer value up or down depending on boundary
     if limit_keyword == 'min':
-        offset = 0
+        idx = math.floor(idx)
     elif limit_keyword == 'max':
-        offset = 1
+        idx = math.ceil(idx)
     else :
         print '\nCoordinate keyword invalid. Exiting.\n'
         sys.exit()
 
-    def round2limit(coord_val, limits, offset):
-        # Adjust coordinate value based on limits and offset
-        # TODO generalize
-        temp = 0.0
-        for i in range(len(limits)-1):
-            if (coord_val >= limits[i]):
-                temp = limits[i + offset]
-        coord_val = temp
+    # Calculate decimal coordinate at rounded index position
+    new_coord = (idx - (deg_range/cell_size))*cell_size
 
-    # Add components for adjusted coordinate
-    new_coord = coord_degs+((coord_mins+(coord_secs/60.))/60.)
+    return new_coord, idx
 
-    # Correct for edge values overlapping meridian
-    # TODO Doesn't make much sense with latitude
-    if new_coord > deg_range:
-        new_coord = new_coord - 360
-    elif new_coord < -deg_range:
-        new_coord = new_coord + 360
-
-    # TODO finish
-    if new_coord < 0:
-        # reverse order from half array lenth
-    elif new_coord >= 0:
-        #add half array length
-
-    # Divide by 0.5 cell width to get index position of coord
-    idx_pos = (new_coord/(bin_size)) - 1 # subtract to get 0 position
-    print 'index position:', idx_pos
-
-    return new_coord, idx_pos
-
-def getGebco(data_dir, min_lon, min_lat, max_lon, max_lat):
-    ''' Extract gebco bathymetry data.
-
-    Uses the
-    '''
-    #gebco_file = 'gebco_08.nc'
-    # Array of second divisions in gebco file
-    limits = np.array([0, 15, 30, 45, 60])
-
-    gebco_file = 'gridone.nc'
-    limits = np.array([0, 30, 60])
+def summary(file_path, print_summary=False):
+    ''' Extract gebco bathymetry data.'''
 
     # Get Lat/Lon from first data file in list
-    dataset = Dataset(os.path.join(data_dir,gebco_file),'r')
-    cols = dataset.variables["dimension"][0]
-    rows = dataset.variables["dimension"][1]
-    grid_w_deg = dataset.variables["spacing"][0]
-    grid_h_deg = dataset.variables["spacing"][1]
-    min_lon = dataset.variables["x_range"][0]
-    max_lon = dataset.variables["x_range"][1]
-    min_lat = dataset.variables["y_range"][0]
-    max_lat = dataset.variables["y_range"][1]
-    z_range = dataset.variables["z_range"][:]
+    dataset = Dataset(file_path,'r')
 
-    # Print Summary
-    print 'cols: ',cols,' rows: ',rows
-    print 'grid width: ', grid_w_deg
-    print 'grid height: ', grid_h_deg
-    print 'min_lon: ', min_lon
-    print 'max_lon: ', max_lon
-    print 'min_lat: ', min_lat
-    print 'max_lat: ', max_lat
-    print z_range
-    print 'lenght z: ', len(dataset.variables["z"][:])
+    cols, rows = dataset.variables["dimension"]
+    grid_w_deg, grid_h_deg = dataset.variables["spacing"]
+    min_lon, max_lon = dataset.variables["x_range"]
+    min_lat, max_lat = dataset.variables["y_range"]
+    min_z, max_z = dataset.variables["z_range"]
+    z = dataset.variables["z"][:5]
 
     dataset.close()
 
+    if print_summary == True:
+        print 'Gebco Bathymetric Data Summary:'
+        print '------------------------------------'
+        print 'cols: ', cols,             ' rows: ', rows
+        print 'grid width: ', grid_w_deg, ' grid height: ', grid_h_deg
+        print 'min_lon: ', min_lon,       ' max_lon: ', max_lon
+        print 'min_lat: ', min_lat,       ' max_lat: ', max_lat
+        print 'min_z: ', min_z,           ' max_z: ', max_z,
+        print 'First five z: ', z
+
+
+def getGebcoData(file_path,min_lon,max_lon,min_lat,max_lat):
+    # Get Lat/Lon from first data file in list
+    dataset = Dataset(file_path,'r')
+
+    cell_size = dataset.variables["spacing"][0]
+
+    min_lon, min_lon_idx = coord2idx(min_lon, 360, cell_size, 'min')
+    max_lon, max_lon_idx = coord2idx(max_lon, 360, cell_size, 'max')
+    min_lat, min_lat_idx = coord2idx(min_lat, 180, cell_size, 'min')
+    max_lat, max_lat_idx = coord2idx(max_lat, 180, cell_size, 'max')
+
+    print min_lon_idx
+    print max_lon_idx
+    print min_lat_idx
+    print max_lat_idx
+
+    z = dataset.variables["z"][min_lat_idx:max_lat_idx, min_lon_idx,max_lon_idx]
+    dataset.close()
+
+    # TODO Make the following better
+    lons = np.array(len(z[0,:]))
+    lats = np.array(len(z[:,0]))
+
+    for i in range(len(lons)):
+        lons[i] = min_lon + i(cell_size*(i+min_lon_idx))
+
+    for i in range(len(lats)):
+        lats[i] = min_lat + (cell_size*(i+min_lat_idx))
+
+    return lons, lats, z
 
 ################
 # Main Program #
@@ -113,12 +102,10 @@ if __name__ == '__main__':
         print >>sys.stderr,'Usage:',sys.argv[0],'<data directory>\n'
         sys.exit(1)
     data_dir = sys.argv[1]
+    data_file = 'gridone.nc'
 
-    limits = np.array([0, 15, 30, 45, 60])
+    file_path = os.path.join(data_dir,data_file)
 
-    test_coord = -179.45869
-    print coord2idx(test_coord, 'max', limits)
-    print coord2idx(75.75, 'min', limits)
-    print coord2idx(180., 'max', limits)
-    print coord2idx(180., 'min', limits)
-    getGebco(data_dir, 0., 40., 50., 65.)
+    summary(file_path)
+
+    lons, lats, z = getGebcoData(file_path,60,100,50,80)
