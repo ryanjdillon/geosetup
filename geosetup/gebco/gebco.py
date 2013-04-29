@@ -33,7 +33,7 @@ def coord2idx(coord, deg_range, cell_size, limit_keyword):
     return new_coord, idx
 
 def summary(file_path):
-    ''' Extract gebco bathymetry data.'''
+    ''' Extract gebco bathymetry data summary.'''
 
     # Get Lat/Lon from first data file in list
     dataset = Dataset(file_path,'r')
@@ -47,18 +47,18 @@ def summary(file_path):
 
     dataset.close()
 
-    print 'Gebco Bathymetric Data Summary:'
+    print '\nGebco Bathymetric Data Summary:'
     print '------------------------------------'
     print 'cols: %i rows: %i' % (cols, rows)
-    print 'grid width: %f grid height: %f' % (grid_w_deg, grid_h_deg)
-    print 'min_lon: %f max_lon: %f' % (min_lon, max_lon)
-    print 'min_lat: %f max_lat: %f' % (min_lat, max_lat)
+    print 'grid width: %06.5f grid height: %06.5f' % (grid_w_deg, grid_h_deg)
+    print 'min_lon: %5.1f max_lon: %5.1f' % (min_lon, max_lon)
+    print 'min_lat: %5.1f max_lat: %5.1f' % (min_lat, max_lat)
     print 'min_z: %i max_z: %i' % (min_z, max_z)
     print 'First five z: ', z
 
 
 def getGebcoData(file_path,min_lon,max_lon,min_lat,max_lat):
-    '''Retrieve GEBCO depth over specified area
+    '''Extract gebco bathymetric data from geographic bounds
 
        cell_size: decimal degree x & y dimension of grid cells
        The depth data is a 1-D array. Given its size, it is faster
@@ -80,49 +80,45 @@ def getGebcoData(file_path,min_lon,max_lon,min_lat,max_lat):
     print 'min_lat_idx', min_lat_idx, 'min_lat', min_lat
     print 'max_lat_idx', max_lat_idx, 'max_lat', max_lat
 
-    # Calculate flattened index positions
-    # Multiply number of elements in each row by row position, adding
-    # the number of columns to get final element count
-    # TODO Collecting all points between indices, even if center subset
-#    idx_start = (min_lat_idx * cols) + min_lon_idx # (row1*z.shape[1])+col1
-#    idx_end   = (max_lat_idx * cols) + max_lon_idx # (row2*z.shape[1])+col2
-    idx = np.ravel_multi_index((np.mgrid[min_lat_idx:max_lat_idx,min_lon_idx:max_lon_idx].reshape(2,-1)), (rows,cols))
-    # TODO remove
-#    print 'idx_start: ', idx_start
-#    print 'idx_end  : ', idx_end
+    lon_range = max_lon_idx - min_lon_idx
+    lat_range = max_lat_idx - min_lat_idx
+    data_range = lon_range * lat_range
 
     zi = 0
-    z = np.zeros((max_lon_idx - min_lon_idx) * (max_lon_idx - min_lon_idx))
-    for i in range(max_lat_idx - min_lon_idx):
-        tmp = ((dataset.variables["z"][(i*cols):((i*cols)+cols)])[min_lon_idx:max_lon_idx])
+    # Create zero array with the appropriate length for the data subset
+    z = np.zeros(data_range)
+    print z.shape
+    # Process number of rows for which data is being extracted
+    for i in range((max_lat_idx - min_lat_idx)):
+        # Pull row, then desired elements of that row into buffer
+        tmp = (dataset.variables["z"][(i*cols):((i*cols)+cols)])[min_lon_idx:max_lon_idx]
+        # Add each item in buffer sequentially to data array
         for j in tmp:
             z[zi] = j
+            # Keep a count of what index position the next data point goes to
             zi += 1
 
-    # Extract data with flattened indexes
-    #z = dataset.variables["z"][idx_start:idx_end]
-    z = dataset.variables["z"][idx]
     dataset.close()
 
     # Create latitude and longitude arrays
     # TODO check if incorrect to offset by one
-    lon_range = (max_lon_idx - min_lon_idx)+1
-    lat_range = (max_lat_idx - min_lat_idx)+1
-    lons = np.zeros(lon_range)
-    lats = np.zeros(lat_range)
+#    lons = np.empty(data_range).fill(min_lon_idx)
+#    lats = np.zeros(data_range).fill(min_lat_idx)
+    lon_const = 360./cell_size/2
+    lat_const = 180./cell_size/2
+    lons = (np.asarray(range(lon_range)) + min_lon_idx - lon_const)*cell_size
+    lats = (np.asarray(range(lat_range)) + min_lat_idx - lat_const)*cell_size
 
-    for i in range(lon_range):
-        lons[i] = ((i+min_lon_idx) - (360./cell_size/2))*cell_size
+#    for i in range(data_range):
+#        lons = ((i+min_lon_idx) - (360./cell_size/2))*cell_size
 
-    for i in range(lat_range):
-        lats[i] = ((i+min_lat_idx) - (180./cell_size/2))*cell_size
+#    for i in range(data_range):
+#        lats[i] = ((i+min_lat_idx) - (180./cell_size/2))*cell_size
 
     # TODO remove
-    print 'lon_range: ', lon_range
-    print 'lat_range: ', lat_range
-    print 'len_lons: ', len(lons)
-    print 'len_lats: ', len(lats)
-    print 'len_z:    ', len(z)
+    print 'len_lons: ', lons.shape
+    print 'len_lats: ', lats.shape
+    print 'len_z:    ', z.shape
 
     return lons, lats, z
 
@@ -147,6 +143,7 @@ if __name__ == '__main__':
 
                   # getGebcoData(file_path,min_lon,max_lon,min_lat,max_lat):
     lons, lats, z = getGebcoData(file_path,-180,0,0,90)
+
     print 'lons: ', lons[:]
     print 'lats: ', lats[:]
     print 'z: ', z[:]
