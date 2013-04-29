@@ -12,10 +12,10 @@ from StringIO import StringIO
 import geosetup.mpl_util
 from geosetup.globcolour import plotglob_mapped
 from geosetup.cortad import getCortad
-from geosetup.griddata import invdistgis
-from geosetup.griddata import invdist
-from geosetup.griddata import data2raster
-from geosetup.griddata.datainterp import geointerp
+from geosetup.gebco import gebco
+from geosetup.interpolate import invdistgis, invdist
+from geosetup.interpolate.datainterp import geointerp
+from geosetup.writefile import data2raster
 
 # prevent creation of .pyc files
 sys.dont_write_bytecode = True
@@ -121,6 +121,7 @@ def filter2bool(regexp,array):
     return np.array([bool(re.search(regexp, element)) for element in array])
 
 if __name__ == '__main__':
+
     #####################
     # Commandline Usage #
     #####################
@@ -136,12 +137,10 @@ if __name__ == '__main__':
     PROJ_DIR = '/home/ryan/Desktop/asf-fellowship/code/geosetup/'
     SST_DIR = 'data/pathfinder/'
     CHL_DIR = 'data/globcolour/'
-    BTM_DIR = 'data/gebco/'
-    GRD_SIZE = 50 #km
-    GRD_LAT_START = 40.
-    GRD_LAT_STOP = 50.
-    GRD_LON_START = -10.
-    GRD_LON_STOP = 10.
+    BTM_DIR = 'data/gebco/gridone.nc'
+    OUT_DIR = 'output/'
+    #TODO incorporate regrid size
+    GRD_SIZE = 50 #km or deg?
 
     #########################
     # Process Sighting Data #
@@ -243,10 +242,6 @@ if __name__ == '__main__':
     plt.colorbar()
     plt.show()
 
-    # Create Effort Gtiff
-    #spueGeopoint = data2raster.GeoPoint(data['lon'],data['lat'],data['spue'])
-    #spueGeopoint.create_raster(filename="spue.tiff",output_format="GTiff")
-
     #TODO remove following
 #    last_idx = 0
 #    idx_pos = 0
@@ -264,20 +259,28 @@ if __name__ == '__main__':
     # append spue calculations to structured array dataset
 #    data = numpy.lib.recfunctions.append_fields(data,'spue',data=spue)
 
+    # Create Effort Gtiff
+    #spueGeopoint = data2raster.GeoPoint(data['lon'],data['lat'],data['spue'])
+    #spueGeopoint.create_raster(filename="spue.tiff",output_format="GTiff")
+
+    LAT_START = 40.
+    LAT_STOP = 50.
+    LON_START = -10.
+    LON_STOP = 10.
+
     #######################
     # Process CorTAD Data #
     #######################
 
+    # calculate days from ref date to first and last sighting
     ref_date=datetime.datetime(1980,12,31,12,0,0)
     days = 60.*60.*24. # sec*min*hr
-
-    # calculate days from ref date to first sighting
     time_start = int(round((data_start - ref_date).total_seconds()/days))
-    # calculate days from ref date to last sighting
     time_end = int(round((data_end - ref_date).total_seconds()/days))
 
+    # Get cortad SST within date period
+    # TODO modify method to subset lat/lon
     filledSST = getCortad.extractCORTADSST("North Sea",time_start,time_end)
-
     lonSST2D, latSST2D, lonSST, latSST = getCortad.extractCoRTADLongLat()
 
     # Print sighting data informtion
@@ -292,21 +295,25 @@ if __name__ == '__main__':
     #################################
 
     # Extract Chl-a data
+    #TODO use lat/lon start/end constants
     chla_lons, chla_lats, chla_vals = plotglob_mapped.getMappedGlobcolour(PROJ_DIR+CHL_DIR,0.,50.,30.,60.,'2007-08-01','2007-08-30')
     chla_vals = np.ravel(chla_vals)
 
     # Create Chla Gtiff
     chlaGeopoint = data2raster.GeoPoint(chla_lons,chla_lats,chla_vals)
-    chlaGeopoint.create_raster(filename="chla.tiff",output_format="GTiff",
-cell_width_meters = 50000, cell_height_meters = 50000)
+    chlaGeopoint.create_raster(filename="chla.tiff", output_format="GTiff",
+                               cell_width_meters = 50000, cell_height_meters = 50000)
 
     ############################
     # Process Bathymetric Data #
     ############################
 
+    # getGebcoData(file_path,min_lon,max_lon,min_lat,max_lat):
+    bathy_lons, bathy_lats, bathy_z = gebco.getGebcoData(BTM_DIR, LON_START, LON_STOP,
+                                                                  LAT_START, LAT_STOP)
     # Create Bathy Gtiff
-    #bathyGeopoint = data2raster.GeoPoint(data['lon'],data['lat'],data['spue'])
-    #bathyGeopoint.create_raster(filename="bathy.tiff",output_format="GTiff")
+    bathyGeopoint = data2raster.GeoPoint(bathy_lons,bathy_lats,bathy_z)
+    bathyGeopoint.create_raster(filename="bathy.tiff",output_format="GTiff")
 
     ###############
     # Create Plot #
