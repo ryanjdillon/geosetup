@@ -10,12 +10,14 @@ import numpy.lib.recfunctions
 import pyproj
 from StringIO import StringIO
 import geosetup.mpl_util
-from geosetup.globcolour import plotglob_mapped
-from geosetup.cortad import getCortad
+#TODO make module naming consistent
+from geosetup.globcolour import globcolour
+from geosetup.cortad import cortad
 from geosetup.gebco import gebco
 from geosetup.interpolate import invdistgis, invdist
 from geosetup.interpolate.datainterp import geointerp
 from geosetup.writefile import data2raster
+from geosetup.sightsurvey import sightsurvey
 
 # prevent creation of .pyc files
 sys.dont_write_bytecode = True
@@ -138,6 +140,7 @@ if __name__ == '__main__':
     SST_DIR = 'data/pathfinder/'
     CHL_DIR = 'data/globcolour/'
     BTM_DIR = 'data/gebco/gridone.nc'
+    SIGHT_DATA = sys.argv[1] # 'data/survey/na07.tab'
     OUT_DIR = 'output/'
     #TODO incorporate regrid size
     GRD_SIZE = 50 #km or deg?
@@ -146,71 +149,26 @@ if __name__ == '__main__':
     # Process Sighting Data #
     #########################
 
-    data_file = sys.argv[1]
-
-    if sys.argv[2]:
-        rows_to_skip = int(sys.argv[2])
-    else:
-        rows_to_skip = 0
-
-    # TODO double check if following is necessary
-    with open(data_file) as fh:
-        io = StringIO(fh.read().replace(',', '\t'))
-
-    # Define names and data types for sighting data
-    record_types = np.dtype([
-                    ('vessel',str,1),           #00 - Vessel ID
-                    ('dates',str,6),            #01 - Date
-                    ('times',str,6),            #02 - Time (local?)
-                    ('lat',float),              #03 - latitude dec
-                    ('lon',float),              #04 - longitude dec -1
-                    ('beafort',str,2),          #05 - beafort scale
-                    ('weather',int),            #06 - weather code
-                    ('visibility',int),         #07 - visibility code
-                    ('effort_sec',float),       #08 - seconds on effort
-                    ('effort_nmil',float),      #09 - n miles on effort
-                    ('lat0',float),             #10 - lat of sight start
-                    ('lon0',float),             #11 - lon of sight start
-                    ('num_observers',int),      #12 - number of observers
-                    ('species',str,6),          #13 - species codes
-                    ('num_animals',int),        #14 - number observed
-                    ('sighting',int),           #15 - Boolean sight code
-                    ('rdist',float),            #16 - distance to sight
-                    ('angle',float),            #17 - angel from ship
-                    ('block',str,2),       #18 - cruise block
-                    ('leg',int),                #19 - cruise leg code
-                    ('observations',str,25),    #20 - cruise obs codes
-                    ])
-
-    # Import data to structured array
-    data = np.genfromtxt(io,dtype=record_types,delimiter='\t',skip_header=rows_to_skip)
-
-    # Correct longitude values
-    data['lon'] = data['lon']*(-1)
-
-    # Create array of unique survey block IDs
-    blocks = np.unique(data['block'])
+    # Get sight surveying data and geographical and time bounds for data
+    data = sightsurvey.getData(SIGHT_DATA, skip_rows=0)
 
     # Get date information for subsampling environment data
-    dates = list()
+    datetimes = list()
     for data_date,data_time in zip(data['dates'],data['times']):
         data_datetime = data_date+data_time
-        dates.append(datetime.datetime.strptime(data_datetime, '%y%m%d%H%M%S'))
+        datetimes.append(datetime.datetime.strptime(data_datetime,'%y%m%d%H%M%S'))
 
-    data_start = min(dates)
-    data_end = max(dates)
-
-    # Print a summary of geo data 
-    print '\nSighting Data Information'
-    print '-------------------------------------------'
-    print 'Data Path: '+data_file
-    print 'First sighting: ',data_start
-    print 'Last sighting: ',data_end
-
+    LON_START = min(data['lon'])
+    LON_STOP = max(data['lon'])
+    LAT_START = min(data['lat'])
+    LAT_STOP = max(data['lat'])
+    TIME_START = min(datetimes)
+    TIME_STOP = max(datetimes)
 
     #######################################
     # Calculate Sightings per unit effort #
     #######################################
+    # TODO decide if this is best place, make general
 
     # 'BM' Blue Whale (Balaenoptera musculus)
     # 'BP' Fin Whale (Balaenoptera physalus)
@@ -218,85 +176,55 @@ if __name__ == '__main__':
     # 'BA' Minke whales (Balaenoptera acutorostrata)
     # 'MN' Humpback Whale (Megaptera novaeangliae)
 
-    # TODO calculate distance between start points and sighting point and compare
-#    g = pyproj.Geod(ellps='WGS84') # Use WGS84 ellipsoid
-#    f_azimuth, b_azimuth, dist = g.inv(data['lon'],data['lat'],data['lon0'],data['lat0'])
-
-    # get create array of indexes for minke whales
+    # Create array of indexes for minke whales
     # TODO verify the effort calc is correct
     minke_idx = np.where(filter2bool('BA',data['species'])==True)[0]
     minke_effort = data['effort_nmil'][minke_idx]
     minke_lat = data['lat'][minke_idx]
     minke_lon = data['lon'][minke_idx]
 
-    minke_proj = data2raster.GeoPoint(minke_lon,minke_lat,minke_effort)
-    minke_x, minke_y = minke_proj.transform_point()
+    # Create Effort Gtiff
+    effortGeopoint = data2raster.GeoPoint(minke_lon, minke_lat, minke_effort)
+    effortGeopoint.create_raster(filename="effort.tiff", output_format="GTiff")
 
+    # Interpolate / Plot Minke effort
+    minke_x, minke_y = effortGeopoint.transform_point()
     ZI = invdist.invDist(minke_lat,minke_lon, minke_effort)
 
     XI, YI = np.meshgrid(minke_x, minke_y)
     n = plt.normalize(0.0, 1000.0)
     plt.subplot(1, 1, 1)
     plt.pcolor(XI, YI, ZI)
-#    plt.scatter(xv, yv, 100, values)
+    #plt.scatter(xv, yv, 100, values)
     plt.colorbar()
     plt.show()
-
-    #TODO remove following
-#    last_idx = 0
-#    idx_pos = 0
-#    minke_effort = np.zeros_like(minke_idx, dtype=float)
-#    for idx in minke_idx:
-#        minke_effort[idx_pos] = dist[last_idx:(idx+1)].sum()
-#        last_idx = idx
-#        idx_pos = idx_pos+1
-
-    # generate list of indexes where effort was greater than zero
-#    effort_idx = np.where(data['effort_sec']*data['effort_nmil'] != 0)
-
-#    spue = data['num_animals'][effort_idx]/(data['effort_sec'][effort_idx]*data['effort_nmil'][effort_idx])
-
-    # append spue calculations to structured array dataset
-#    data = numpy.lib.recfunctions.append_fields(data,'spue',data=spue)
-
-    # Create Effort Gtiff
-    #spueGeopoint = data2raster.GeoPoint(data['lon'],data['lat'],data['spue'])
-    #spueGeopoint.create_raster(filename="spue.tiff",output_format="GTiff")
-
-    LAT_START = 40.
-    LAT_STOP = 50.
-    LON_START = -10.
-    LON_STOP = 10.
 
     #######################
     # Process CorTAD Data #
     #######################
 
-    # calculate days from ref date to first and last sighting
-    ref_date=datetime.datetime(1980,12,31,12,0,0)
-    days = 60.*60.*24. # sec*min*hr
-    time_start = int(round((data_start - ref_date).total_seconds()/days))
-    time_end = int(round((data_end - ref_date).total_seconds()/days))
-
     # Get cortad SST within date period
     # TODO modify method to subset lat/lon
-    filledSST = getCortad.extractCORTADSST("North Sea",time_start,time_end)
-    lonSST2D, latSST2D, lonSST, latSST = getCortad.extractCoRTADLongLat()
+    filledSST = cortad.extractCORTADSST("North Sea", TIME_START, TIME_STOP)
+    lonSST2D, latSST2D, sst_lon, sst_lat = cortad.extractCoRTADLongLat()
 
     # Print sighting data informtion
-    print 'Sighting Period: ', time_start, time_end, data_end-data_start
+    # TODO move to function
+    print 'Sighting Period: ', TIME_START, TIME_STOP, TIME_STOP - TIME_START
 
     # Create SST Gtiff
-    #sstGeopoint = data2raster.GeoPoint(data['lon'],data['lat'],data['spue'])
-    #sstGeopoint.create_raster(filename="spue.tiff",output_format="GTiff")
+    sstGeopoint = data2raster.GeoPoint(sst_lon, sst_lat, filledSST)
+    sstGeopoint.create_raster(filename="sst.tiff", output_format="GTiff")
 
     #################################
     # Process Globcolour Chl-a Data #
     #################################
 
     # Extract Chl-a data
-    #TODO use lat/lon start/end constants
-    chla_lons, chla_lats, chla_vals = plotglob_mapped.getMappedGlobcolour(PROJ_DIR+CHL_DIR,0.,50.,30.,60.,'2007-08-01','2007-08-30')
+    chla_lons, chla_lats, chla_vals = globcolour.getMappedGlob(PROJ_DIR+CHL_DIR,
+                                                               LON_START, LON_END,
+                                                               LAT_START, LAT_END,
+                                                               TIME_START, TIME_STOP)
     chla_vals = np.ravel(chla_vals)
 
     # Create Chla Gtiff
@@ -308,7 +236,7 @@ if __name__ == '__main__':
     # Process Bathymetric Data #
     ############################
 
-    # getGebcoData(file_path,min_lon,max_lon,min_lat,max_lat):
+    # Extract bathymetric data
     bathy_lons, bathy_lats, bathy_z = gebco.getGebcoData(BTM_DIR, LON_START, LON_STOP,
                                                                   LAT_START, LAT_STOP)
     # Create Bathy Gtiff
