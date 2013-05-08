@@ -5,6 +5,7 @@ Python package for reprojecting, gridding, and writing geospatial data to format
 
 **Code Credits:**
 * Trond Kristiansen - plotting and CorTAD module
+* J. Gomez-Dans (j.gomez-dans@geog.ucl.ac.uk) - gridding module
 * more TBA
 
 Modules
@@ -28,4 +29,14 @@ Modules
 
 * **globcolour:** Extracts Chl-a data from daily averaged globcolour merged chlorophyll data. Supports subsetting by geographic and time bounds.
 
-
+Todo / Issues
+-------
+* create method to create grid for sample area
+* Re-sample to defined grid
+* determine why gaps in geotiff files
+* write method to write to ASCII grid
+* Determine if effort is correct/ perhaps split by cruise leg
+* print log/summary file with images
+* check that chl-a method is working correctly
+* check what is going on with bathy mirror problem, spot check depths?
+* make sure land masses are masked

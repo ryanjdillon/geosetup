@@ -8,7 +8,7 @@ from osgeo.gdalconst import *
 import pyproj
 import scipy.sparse
 import scipy
-gdal.AllRegister()
+gdal.AllRegister() #TODO remove? not necessary?
 gdal.UseExceptions()
 
 '''http://monkut.webfactional.com/blog/archive/2012/5/2/understanding-raster-basic-gis-concepts-and-the-python-gdal-library/'''
@@ -30,15 +30,21 @@ class GeoPoint:
 
     """lon/lat values in WGS84"""
     # LatLon with WGS84 datum used by GPS units and Google Earth
-    wgs84 = pyproj.Proj("+init=EPSG:4326")
+    wgs84 = pyproj.Proj(init='EPSG:4326')
     # Lambert Conformal Conical (LCC)
-    lcc = pyproj.Proj("+init=EPSG:3034")
+    lcc = pyproj.Proj(init='EPSG:3034')
+    # Albers Equal Area Conic (aea)
+    nplaea1 = pyproj.Proj("+proj=laea +lat_0=90 +lon_0=-40 +x_0=0 +y_0=0 \
+                       +ellps=WGS84 +datum=WGS84 +units=m +no_defs")
+    # North pole LAEA Atlantic
+    nplaea2 = pyproj.Proj(init='EPSG:3574')
     # WGS84 Web Mercator (Auxillary Sphere; aka EPSG:900913)
-    web_mercator = pyproj.Proj("+init=EPSG:3857")
+    # Why not to use the following: http://gis.stackexchange.com/a/50791/12871
+    web_mercator = pyproj.Proj(init='EPSG:3857')
     # TODO add useful projections, or hopefully make automatic
 
-    def __init__(self, x, y, vals,inproj=wgs84, outproj=web_mercator,
-cell_width_meters=50.,cell_height_meters=50.):
+    def __init__(self, x, y, vals,inproj=wgs84, outproj=nplaea,
+                           cell_width_meters=50.,cell_height_meters=50.):
         self.x = x
         self.y = y
         self.vals = vals
@@ -176,8 +182,10 @@ output_format="GTiff", cell_width_meters=1000., cell_height_meters=1000.):
         # set dataset to None to "close" file
         dataset = None
 
-        #END FUNCTION - NO RETURN VALUE
-
+def create_ascii():
+    '''Writes data to ESRI ascii grid file *.asc
+    http://gis.stackexchange.com/a/37272/12871'''
+    # TODO
 
 #################
 # Main Function #
@@ -190,11 +198,12 @@ if __name__ == '__main__':
     lon = [134.6,136.2,136.9,0.5]
     val = [3,6,2,8]
 
-    #generate some random lats and lons
-#    import random
-#    lats = [random.uniform(45,75) for r in xrange(500)]
-#    lons = [random.uniform(-2,65) for r in xrange(500)]
-#    vals = [random.uniform(1,15) for r in xrange(500)]
+    # TODO clean-up test
+    # Generate some random lats and lons
+    #import random
+    #lats = [random.uniform(45,75) for r in xrange(500)]
+    #lons = [random.uniform(-2,65) for r in xrange(500)]
+    #vals = [random.uniform(1,15) for r in xrange(500)]
 
     lats = np.random.uniform(45,75,500)
     lons = np.random.uniform(-2,65,500)

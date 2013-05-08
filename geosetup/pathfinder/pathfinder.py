@@ -20,17 +20,18 @@ both may be more desirable.
 #############
 
 def subset_geodata(max_lon, min_lon, max_lat, min_lat,lons, lats, values):
-    '''subset_geodata  returns a subset of lat/lon/value data from defined
-       defined bounds in decimal degrees'''
+    '''Returns a subset of lat/lon/value data 
+
+       from defined defined bounds in decimal degrees'''
+
     subset_lons = lons[(lons<max_lon)&(lons>min_lon)&(lats<max_lat)&(lats>min_lat)]
     subset_lats = lats[(lons<max_lon)&(lons>min_lon)&(lats<max_lat)&(lats>min_lat)]
     subset_vals = values[(lons<max_lon)&(lons>min_lon)&(lats<max_lat)&(lats>min_lat)]
     return subset_lons, subset_lats, subset_vals
 
 def find_nearest(array,value):
-    '''
-    Returns index position of element nearest to given value
-    '''
+    '''Returns index position of element nearest to given value'''
+
     idx = (np.abs(array-value)).argmin()
     #return array[idx] # return value
     return idx # return index
@@ -48,15 +49,11 @@ def printstuff(vals,vals_sum,file_count):
     print '\n----------------'
 
 def getnetcdfdata(data_dir, nc_var_name, min_lon, max_lon, min_lat, max_lat, data_time_start, data_time_end):
-    '''
-    Extracts subset of data from netCDF file based on lat/lon bounds and dates in the
-    iso format '2012-01-31'
-    '''
+    '''Extracts subset of data from netCDF file 
 
-#    data_time_start = datetime.datetime.strptime(data_time_start, '%Y-%m-%d')
-#    data_time_end = datetime.datetime.strptime(data_time_end, '%Y-%m-%d')
+    based on lat/lon bounds and dates in the iso format '2012-01-31' '''
 
-    #TODO figure out if this is right
+    # Create list of data files to process given date-range
     file_list = np.asarray(os.listdir(data_dir))
     file_dates = np.asarray([datetime.datetime.strptime(re.split('-', filename)[0], '%Y%m%d%H%M%S') for filename in file_list])
     data_files = np.sort(file_list[(file_dates >= data_time_start)&(file_dates <= data_time_end)])
@@ -66,18 +63,21 @@ def getnetcdfdata(data_dir, nc_var_name, min_lon, max_lon, min_lat, max_lat, dat
     lons = dataset.variables["lon"][:]
     lats = dataset.variables["lat"][:]
 
-    # Create indexes for pulling slices of data from netCDF files
+    # Create indexes where lat/lons are between bounds 
     lons_idx = np.where((lons > math.floor(min_lon))&(lons < math.ceil(max_lon)))[0]
     lats_idx = np.where((lats > math.floor(min_lat))&(lats < math.ceil(max_lat)))[0]
     x_min = lons_idx.min()
     x_max = lons_idx.max()
     y_min = lats_idx.min()
     y_max = lats_idx.max()
+
+    # Create arrays for performing averaging of files
     vals_sum = np.zeros((y_max-y_min + 1, x_max-x_min + 1))
     vals_sum = ma.masked_where(vals_sum < 0 , vals_sum)
     mask_sum = np.empty((y_max-y_min + 1, x_max-x_min + 1))
     dataset.close()
 
+    #TODO correct masking/interpolation.
     # Create cumulative mask for averaging data in provided date range
 #    for data_file in data_files:
 #        current_file = os.path.join(data_dir,data_file)
@@ -96,7 +96,7 @@ def getnetcdfdata(data_dir, nc_var_name, min_lon, max_lon, min_lat, max_lat, dat
         # TODO correct so masking/interpolating instead of zeros
         #vals = ma.masked_where(vals < 0, vals)
         #ma.set_fill_value(vals, -999)
-        vals = vals.clip(0) #TODO remove
+        vals = vals.clip(0) #TODO remove once above is corrected
         vals_sum += vals
         file_count += 1
         dataset.close()
@@ -138,11 +138,8 @@ if __name__ == '__main__':
     start_date = datetime.datetime.strptime(start_date, '%Y-%m-%d')
     end_date = datetime.datetime.strptime(end_date, '%Y-%m-%d')
 
-    lons, lats, vals_mean = getnetcdfdata(data_dir,'sea_surface_temperature',0.,50.,30.,60.,start_date,
-end_date)
+    lons, lats, vals_mean = getnetcdfdata(data_dir,'sea_surface_temperature',0.,50.,30.,60.,
+                                          start_date, end_date)
     print lons[0]-lons[1]
     print lons[1]-lons[2]
     print lons[100]-lons[101]
-    print vals_mean.shape
-    print lons.shape
-    print lats.shape
