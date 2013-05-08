@@ -3,8 +3,9 @@
 from mpl_toolkits.basemap import Basemap
 import matplotlib.pyplot as plt
 import numpy as np
-import sys
+import sys, os, errno
 import re
+import math
 import datetime
 import numpy.lib.recfunctions
 import pyproj
@@ -12,7 +13,7 @@ from StringIO import StringIO
 import geosetup.mpl_util
 #TODO make module naming consistent
 from geosetup.globcolour import globcolour
-from geosetup.cortad import cortad
+from geosetup.pathfinder import pathfinder
 from geosetup.gebco import gebco
 from geosetup.interpolate import invdistgis, invdist
 from geosetup.interpolate.datainterp import geointerp
@@ -71,18 +72,18 @@ def centerMap(lons,lats,scale):
     # inv returns [0]forward azimuth, [1]back azimuth, [2]distance between
 
     # a_dist = the height of the map (i.e. mapH)
-    b_dist = g.inv(west_lon,north_lat,east_lon,north_lat)[2]/2
-    c_dist = g.inv(west_lon,north_lat,lon0,south_lat)[2]
+    b_dist = g.inv(west_lon, north_lat, east_lon, north_lat)[2]/2
+    c_dist = g.inv(west_lon, north_lat, lon0, south_lat)[2]
 
     mapH = pow(pow(c_dist,2)-pow(b_dist,2),1./2)
     lat0 = g.fwd(lon0,south_lat,0,mapH/2)[1]
 
     # distance between max E and W longitude at most southern latitude
-    mapW = g.inv(west_lon,south_lat,east_lon,south_lat)[2]
+    mapW = g.inv(west_lon, south_lat, east_lon, south_lat)[2]
 
-    return lon0,lat0,mapW*scale,mapH*scale
+    return lon0, lat0, mapW*scale, mapH*scale
 
-def drawsst(ax,map_object,longSST,latSST,filledSST,myalpha):
+def drawsst(ax, map_object, longSST, latSST, filledSST, myalpha):
     '''
     Draw Sea surface temperature - Trond Kristiansen
     '''
@@ -93,30 +94,30 @@ def drawsst(ax,map_object,longSST,latSST,filledSST,myalpha):
 
     # TODO correct issue with colormap
     if myalpha > 0.99:
-        CS2 = map_object.contourf(x2,y2,filledSST,levels,
+        CS2 = map_object.contourf(x2, y2, filledSST, levels,
                 #cmap=mpl_util.LevelColormap(levels,cmap=cm.RdYlBu_r),
-                cmap=plt.cm.jet,
-                extend='upper',alpha=myalpha)
+                cmap = plt.cm.jet,
+                extend = 'upper', alpha=myalpha)
     else:
-        CS2 = map_object.contourf(x2,y2,filledSST,levels,
+        CS2 = map_object.contourf(x2, y2, filledSST, levels,
                 #cmap=mpl_util.LevelColormap(levels,cmap=cm.RdYlBu_r),
-                cmap=plt.cm.jet,
-                extend='upper',alpha=myalpha)
+                cmap = plt.cm.jet,
+                extend = 'upper', alpha=myalpha)
 
         # TODO correct or remove
         #CS2 = map_object.contourf(x2,y2,filledSST,levels,
         #               cmap=mpl_util.LevelColormap(levels,cmap=cm.Greys),
         #               extend='upper',alpha=myalpha)
 
-def find_nearest(array,value):
+def find_nearest(array, value):
     '''
     TODO
     '''
-    idx = (np.abs(array-value)).argmin()
+    idx = (np.abs(array - value)).argmin()
     #return array[idx] # return value
     return idx # return index
 
-def filter2bool(regexp,array):
+def filter2bool(regexp, array):
     '''
     Create array of positive boolean where elements match regex 
     '''
@@ -145,6 +146,13 @@ if __name__ == '__main__':
     #TODO incorporate regrid size
     GRD_SIZE = 50 #km or deg?
 
+    # Test that output directory exists, if not create it
+    try:
+        os.makedirs(OUT_DIR)
+    except OSError, e:
+        if e.errno != errno.EEXIST:
+            raise
+
     #########################
     # Process Sighting Data #
     #########################
@@ -159,17 +167,28 @@ if __name__ == '__main__':
         datetimes.append(datetime.datetime.strptime(data_datetime,'%y%m%d%H%M%S'))
 
     LON_START = min(data['lon'])
-    LON_STOP = max(data['lon'])
+    LON_END = max(data['lon'])
     LAT_START = min(data['lat'])
-    LAT_STOP = max(data['lat'])
+    LAT_END = max(data['lat'])
     TIME_START = min(datetimes)
-    TIME_STOP = max(datetimes)
+    TIME_END = max(datetimes)
+
+    # Print sighting data informtion
+    print 'Sighting Period: ', TIME_START, TIME_END, TIME_END - TIME_START
+    ###############
+    # Create Grid #
+    ###############
+
+    grid_lat_start =  math.floor(LAT_START)
+    grid_lon_start =  math.floor(LON_START)
+    grid_lat_end =  math.ceil(LAT_END)
+    grid_lon_end =  math.ceil(LON_END)
+    grid_lats = np.linspace(GRD_SIZE, 180, 180/GRD_SIZE)
+    grid_lons = np.linspace(GRD_SIZE, 180, 180/GRD_SIZE)
 
     #######################################
     # Calculate Sightings per unit effort #
     #######################################
-    # TODO decide if this is best place, make general
-
     # 'BM' Blue Whale (Balaenoptera musculus)
     # 'BP' Fin Whale (Balaenoptera physalus)
     # 'BB' Sei Whale (Balaenoptera borealis)
@@ -185,7 +204,7 @@ if __name__ == '__main__':
 
     # Create Effort Gtiff
     effortGeopoint = data2raster.GeoPoint(minke_lon, minke_lat, minke_effort)
-    effortGeopoint.create_raster(filename="effort.tiff", output_format="GTiff")
+    effortGeopoint.create_raster(filename = OUT_DIR + "effort.tiff", output_format="GTiff")
 
     # Interpolate / Plot Minke effort
     minke_x, minke_y = effortGeopoint.transform_point()
@@ -200,21 +219,37 @@ if __name__ == '__main__':
     plt.show()
 
     #######################
-    # Process CorTAD Data #
+    # Process CorTAD Data # TODO revue / remove
     #######################
 
-    # Get cortad SST within date period
-    # TODO modify method to subset lat/lon
-    filledSST = cortad.extractCORTADSST("North Sea", TIME_START, TIME_STOP)
-    lonSST2D, latSST2D, sst_lon, sst_lat = cortad.extractCoRTADLongLat()
+#    # Get cortad SST within date period
+#    # TODO modify method to subset lat/lon
+#    filledSST = cortad.extractCORTADSST("North Sea", TIME_START, TIME_END)
+#    lonSST2D, latSST2D, sst_lon, sst_lat = cortad.extractCoRTADLongLat()
+#    sst_lon, sst_lat = np.meshgrid(sst_lon,sst_lat)
+#    sst_lon = np.ravel(sst_lon)
+#    sst_lat = np.ravel(sst_lat)
+#    filledSST_flat = np.ravel(filledSST)
 
-    # Print sighting data informtion
-    # TODO move to function
-    print 'Sighting Period: ', TIME_START, TIME_STOP, TIME_STOP - TIME_START
+#    # Create SST Gtiff
+#    sstGeopoint = data2raster.GeoPoint(sst_lon, sst_lat, filledSST_flat)
+#    sstGeopoint.create_raster(filename = OUT_DIR + "sst.tiff", output_format="GTiff")
 
+    ###############################
+    # Process Pathfinder SST Data #
+    ###############################
+
+    # Extract Chl-a datai
+    # getnetcdfdata(data_dir, nc_var_name, min_lon, max_lon, min_lat, max_lat, data_time_start, data    _time_end):
+    sst_lons, sst_lats, sst_vals = pathfinder.getnetcdfdata(PROJ_DIR + SST_DIR, 
+                                                              'sea_surface_temperature',
+                                                               LON_START, LON_END,
+                                                               LAT_START, LAT_END,
+                                                               TIME_START, TIME_END)
     # Create SST Gtiff
-    sstGeopoint = data2raster.GeoPoint(sst_lon, sst_lat, filledSST)
-    sstGeopoint.create_raster(filename="sst.tiff", output_format="GTiff")
+    sstGeopoint = data2raster.GeoPoint(sst_lons, sst_lats, sst_vals)
+    sstGeopoint.create_raster(filename = OUT_DIR + "sst.tiff", output_format="GTiff",
+                               cell_width_meters = 5000, cell_height_meters = 5000)
 
     #################################
     # Process Globcolour Chl-a Data #
@@ -224,24 +259,24 @@ if __name__ == '__main__':
     chla_lons, chla_lats, chla_vals = globcolour.getMappedGlob(PROJ_DIR+CHL_DIR,
                                                                LON_START, LON_END,
                                                                LAT_START, LAT_END,
-                                                               TIME_START, TIME_STOP)
+                                                               TIME_START, TIME_END)
     chla_vals = np.ravel(chla_vals)
 
     # Create Chla Gtiff
     chlaGeopoint = data2raster.GeoPoint(chla_lons,chla_lats,chla_vals)
-    chlaGeopoint.create_raster(filename="chla.tiff", output_format="GTiff",
-                               cell_width_meters = 50000, cell_height_meters = 50000)
+    chlaGeopoint.create_raster(filename = OUT_DIR + "chla.tiff", output_format="GTiff",
+                               cell_width_meters = 5000, cell_height_meters = 5000)
 
     ############################
     # Process Bathymetric Data #
     ############################
 
     # Extract bathymetric data
-    bathy_lons, bathy_lats, bathy_z = gebco.getGebcoData(BTM_DIR, LON_START, LON_STOP,
-                                                                  LAT_START, LAT_STOP)
+    bathy_lons, bathy_lats, bathy_z = gebco.getGebcoData(BTM_DIR, LON_START, LON_END,
+                                                                  LAT_START, LAT_END)
     # Create Bathy Gtiff
     bathyGeopoint = data2raster.GeoPoint(bathy_lons,bathy_lats,bathy_z)
-    bathyGeopoint.create_raster(filename="bathy.tiff",output_format="GTiff")
+    bathyGeopoint.create_raster(filename = OUT_DIR + "bathy.tiff",output_format="GTiff")
 
     ###############
     # Create Plot #
@@ -268,7 +303,7 @@ if __name__ == '__main__':
                 lat_0=lat0center,lon_0=lon0center)
 
     # Plot STT
-    drawsst(ax,m,lonSST2D,latSST2D,filledSST,0.25)
+    #drawsst(ax,m,lonSST2D,latSST2D,filledSST,0.25)
 
     # Plot Chl-a
     #TODO

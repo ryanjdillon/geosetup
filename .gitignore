@@ -1,6 +1,7 @@
-# Ignore `test` and `SAVE` directories
+# Ignore `test`, `SAVE`, and `Output` directories
 test/
 SAVE/
+output/
 
 # Ignore data dir with `*.nc` and `*.nc.gz` data files
 data/

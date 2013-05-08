@@ -80,14 +80,14 @@ def getGebcoData(file_path,min_lon,max_lon,min_lat,max_lat):
     print 'min_lat_idx', min_lat_idx, 'min_lat', min_lat
     print 'max_lat_idx', max_lat_idx, 'max_lat', max_lat
 
-    lon_range = max_lon_idx - min_lon_idx
-    lat_range = max_lat_idx - min_lat_idx
+    # TODO check if incorrect to offset by one
+    lon_range = (max_lon_idx - min_lon_idx) + 1
+    lat_range = (max_lat_idx - min_lat_idx) + 1
     data_range = lon_range * lat_range
 
     zi = 0
     # Create zero array with the appropriate length for the data subset
     z = np.zeros(data_range)
-    print z.shape
     # Process number of rows for which data is being extracted
     for i in range((max_lat_idx - min_lat_idx)):
         # Pull row, then desired elements of that row into buffer
@@ -101,19 +101,13 @@ def getGebcoData(file_path,min_lon,max_lon,min_lat,max_lat):
     dataset.close()
 
     # Create latitude and longitude arrays
-    # TODO check if incorrect to offset by one
-#    lons = np.empty(data_range).fill(min_lon_idx)
-#    lats = np.zeros(data_range).fill(min_lat_idx)
     lon_const = 360./cell_size/2
     lat_const = 180./cell_size/2
     lons = (np.asarray(range(lon_range)) + min_lon_idx - lon_const)*cell_size
     lats = (np.asarray(range(lat_range)) + min_lat_idx - lat_const)*cell_size
-
-#    for i in range(data_range):
-#        lons = ((i+min_lon_idx) - (360./cell_size/2))*cell_size
-
-#    for i in range(data_range):
-#        lats[i] = ((i+min_lat_idx) - (180./cell_size/2))*cell_size
+    lons, lats = np.meshgrid(lons,lats)
+    lons = np.ravel(lons)
+    lats = np.ravel(lats)
 
     # TODO remove
     print 'len_lons: ', lons.shape
@@ -141,8 +135,8 @@ if __name__ == '__main__':
 
     summary(file_path)
 
-                  # getGebcoData(file_path,min_lon,max_lon,min_lat,max_lat):
-    lons, lats, z = getGebcoData(file_path,-180,0,0,90)
+    # getGebcoData(file_path,min_lon,max_lon,min_lat,max_lat):
+    lons, lats, z = getGebcoData(file_path,-20,20,-20,20)
 
     print 'lons: ', lons[:]
     print 'lats: ', lats[:]

@@ -28,11 +28,13 @@ def getCORTADtime():
     return time
 
 def openCoRTAD():
+    # TODO Generalize to accept dates and geobounds, data dir
     """ Info on the different tiles used to identoify a region is found here:
     http://www.nodc.noaa.gov/SatelliteData/Cortad/TileMap.jpg"""
     #base='/media/data/storage02/asf-fellowship/data/CoRTAD/version4/'
-    base= '/home/ryan/code/python/projects/asf/geosetup/data/cortadv4/'
+    base= '/home/ryan/code/python/projects/asf/geosetup/data/cortad/'
 #    base="http://data.nodc.noaa.gov/thredds/dodsC/cortad/Version4/"
+
     start_row = 00
     start_col = 05
     end_row = 01
@@ -126,10 +128,16 @@ def extractCoRTADLongLat():
     print "------------------------------\n"
     return lons, lats, longitude, latitude
 
-def extractCORTADSST(name,t1,t2): # name doesn't seem necessary?
+def extractCORTADSST(timestamp_start, timestamp_end, masked=True):
     """Routine that extracts the SST values for
     the specific tiles and time-period (t)"""
     cdf1,cdf2,cdf3,cdf4,cdf5,cdf6,cdf7,cdf8,cdf9,cdf10=openCoRTAD()
+
+    # calculate days from ref date to first and last sighting
+    ref_date=datetime.datetime(1980,12,31,12,0,0)
+    days = 60.*60.*24. # sec*min*hr
+    t1 = int(round((timestamp_start - ref_date).total_seconds()/days))
+    t2 = int(round((timestamp_end - ref_date).total_seconds()/days))
 
     cortad_time=np.squeeze(cdf1.variables["time"][:])
 

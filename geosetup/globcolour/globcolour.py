@@ -43,19 +43,17 @@ def printstuff(vals,vals_sum,file_count):
     print 'min', ma.amin(vals)
     print '\n----------------'
 
-def getMappedGlobcolour(data_dir, min_lon, min_lat, max_lon, max_lat, start_date, end_date):
+def getMappedGlob(data_dir, min_lon, max_lon, min_lat, max_lat, data_time_start, data_time_end):
     '''
     Extracts subset of globcolour data based on lat/lon bounds and dates in the
     iso format '2012-01-31'
     '''
-    start_date = datetime.datetime.strptime(start_date, '%Y-%m-%d')
-    end_date = datetime.datetime.strptime(end_date, '%Y-%m-%d')
+
+    #TODO figure out if this is right
     file_list = np.asarray(os.listdir(data_dir))
     file_dates = np.asarray([datetime.datetime.strptime(re.split('[._]', filename)[1], '%Y%m%d')
                              for filename in file_list])
-    data_files = file_list[(file_dates >= start_date) & (file_dates <= end_date)]
-
-    file_count = 0
+    data_files = file_list[(file_dates >= data_time_start) & (file_dates <= data_time_end)]
 
     # Get Lat/Lon from first data file in list
     dataset = Dataset(os.path.join(data_dir,file_list[0]),'r')
@@ -75,6 +73,7 @@ def getMappedGlobcolour(data_dir, min_lon, min_lat, max_lon, max_lat, start_date
     vals_sum.mask = mask_sum
 
     # Get average of chlorophyl values from date range
+    file_count = 0
     for data_file in data_files:
         current_file = os.path.join(data_dir,data_file)
         dataset = Dataset(current_file,'r') # by default numpy masked array
@@ -97,8 +96,8 @@ def getMappedGlobcolour(data_dir, min_lon, min_lat, max_lon, max_lat, start_date
     # Print Globcolour Information
     print '\nChl-a Information'
     print '-------------------------------------------'
-    print 'Start Date: ', start_date
-    print 'End Date: ', end_date
+    print 'Start Date: ', data_time_start
+    print 'End Date: ', data_time_end
     print 'Max Chl-a: ', np.amax(vals_mean)
     print 'Min Chl-a: ', np.amin(vals_mean)
 
